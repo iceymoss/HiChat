@@ -1,0 +1,39 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "HiCha聊天服务",
+        "title": "这是一个测试文档",
+        "contact": {},
+        "version": "1.0"
+    },
+    "host": "127.0.0.1:8000",
+    "basePath": "/user",
+    "paths": {
+        "/index": {
+            "get": {
+                "description": "首页",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "测试"
+                ],
+                "summary": "index 获取首页",
+                "responses": {}
+            }
+        },
+        "/list": {
+            "get": {
+                "description": "用户列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "测试"
+                ],
+                "summary": "List 获取用户列表",
+                "responses": {}
+            }
+        }
+    }
+}

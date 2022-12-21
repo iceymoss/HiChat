@@ -1,0 +1,7 @@
+mysql:
+  host: '127.0.0.1'
+  port: '3306'
+  name: 'hi_chat'
+  user: 'root'
+  password: 'Qq/2013XiaoKUang'
+

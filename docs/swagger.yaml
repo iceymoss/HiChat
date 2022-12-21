@@ -1,0 +1,27 @@
+basePath: /user
+host: 127.0.0.1:8000
+info:
+  contact: {}
+  description: HiCha聊天服务
+  title: 这是一个测试文档
+  version: "1.0"
+paths:
+  /index:
+    get:
+      consumes:
+      - application/json
+      description: 首页
+      responses: {}
+      summary: index 获取首页
+      tags:
+      - 测试
+  /list:
+    get:
+      consumes:
+      - application/json
+      description: 用户列表
+      responses: {}
+      summary: List 获取用户列表
+      tags:
+      - 测试
+swagger: "2.0"

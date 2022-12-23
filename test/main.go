@@ -2,8 +2,6 @@ package main
 
 import (
 	"HiChat/models"
-	"log"
-	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -17,21 +15,30 @@ func main() {
 		panic(err)
 	}
 
-	err = db.AutoMigrate(&models.UserBasic{})
+	//err = db.AutoMigrate(&models.UserBasic{})
+	//if err != nil {
+	//	panic(err)
+	//}
+	//err = db.AutoMigrate(&models.Message{}, &models.GroupInfo{}, &models.Relation{})
+	//if err != nil {
+	//	panic(err)
+	//}
+
+	err = db.AutoMigrate(&models.Message{})
 	if err != nil {
 		panic(err)
 	}
 
-	user := models.UserBasic{}
-	user.Name = "iceymoss"
-
-	t := time.Now()
-	user.LoginTime = &t
-
-	if tx := db.Create(&user); tx.RowsAffected == 0 {
-		log.Fatal("新建用户失败", err)
-	}
-
-	db.Model(&user).Where(1).Update("pass_word", "123456")
+	//user := models.UserBasic{}
+	//user.Name = "iceymoss"
+	//
+	//t := time.Now()
+	//user.LoginTime = &t
+	//
+	//if tx := db.Create(&user); tx.RowsAffected == 0 {
+	//	log.Fatal("新建用户失败", err)
+	//}
+	//
+	//db.Model(&user).Where(1).Update("pass_word", "123456")
 
 }

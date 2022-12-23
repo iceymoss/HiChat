@@ -13,7 +13,7 @@ import (
 // @version 1.0
 // @description HiCha聊天服务
 // @host 127.0.0.1:8000
-// @BasePath /user
+// @BasePath /v1
 func main() {
 	//初始化日志
 	initialize.InitLogger()
@@ -21,6 +21,7 @@ func main() {
 	initialize.InitConfig()
 	//初始化数据库
 	initialize.InitDB()
+	initialize.InitRedis()
 
 	router := router.Router()
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

@@ -1,4 +1,4 @@
-basePath: /user
+basePath: /v1
 host: 127.0.0.1:8000
 info:
   contact: {}
@@ -15,7 +15,22 @@ paths:
       summary: index 获取首页
       tags:
       - 测试
-  /list:
+  /user/delete:
+    delete:
+      parameters:
+      - description: userID
+        in: formData
+        name: id
+        type: string
+      responses:
+        "200":
+          description: code","message"}
+          schema:
+            type: string
+      summary: 注销用户
+      tags:
+      - 用户模块
+  /user/list:
     get:
       consumes:
       - application/json
@@ -24,4 +39,85 @@ paths:
       summary: List 获取用户列表
       tags:
       - 测试
+  /user/login_pw:
+    post:
+      parameters:
+      - description: 用户名
+        in: formData
+        name: name
+        type: string
+      - description: 密码
+        in: formData
+        name: password
+        type: string
+      responses:
+        "200":
+          description: code","message"}
+          schema:
+            type: string
+      summary: 密码登录
+      tags:
+      - 用户模块
+  /user/new:
+    post:
+      parameters:
+      - description: 用户名
+        in: formData
+        name: name
+        type: string
+      - description: 密码
+        in: formData
+        name: password
+        type: string
+      - description: 确认密码
+        in: formData
+        name: Identity
+        type: string
+      responses:
+        "200":
+          description: code","message"}
+          schema:
+            type: string
+      summary: 新增用户
+      tags:
+      - 用户模块
+  /user/updata:
+    put:
+      parameters:
+      - description: userID
+        in: formData
+        name: id
+        type: string
+      - description: 昵称
+        in: formData
+        name: name
+        type: string
+      - description: 密码
+        in: formData
+        name: password
+        type: string
+      - description: 头像
+        in: formData
+        name: avatar
+        type: string
+      - description: 性别
+        in: formData
+        name: gender
+        type: string
+      - description: 邮件
+        in: formData
+        name: email
+        type: string
+      - description: 电话
+        in: formData
+        name: phone
+        type: string
+      responses:
+        "200":
+          description: code","message"}
+          schema:
+            type: string
+      summary: 更新用户
+      tags:
+      - 用户模块
 swagger: "2.0"

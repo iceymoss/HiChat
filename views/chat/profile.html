@@ -1,0 +1,56 @@
+{{define "/chat/profile.shtml"}}
+<div id="tabbar-profile" class="mui-control-content user-info" v-show="win=='main'">
+    <header class="mui-bar mui-bar-nav">
+        <h1 class="mui-title">个人中心</h1>
+    </header>
+    <ul class="mui-table-view mui-table-view-chevron">
+        <li class="mui-table-view-cell mui-media" @click="setUserInfo">
+
+            <img class="mui-media-object mui-pull-left head-img" id="head-img"
+                :src="info.icon || '/asset/images/avatar0.png'">
+            <div class="mui-media-body">
+                <span v-text="info.name">betatech</span>
+                <p class='mui-ellipsis' v-text="profile.memo">专业可靠的IM解决方案专家</p>
+            </div>
+
+        </li>
+    </ul>
+    <ul class="mui-table-view">
+        <!-- <li class="mui-table-view-cell">
+            <a href="sysmsg.shtml" class="">
+                通知公告
+            </a>
+        </li> -->
+
+        <li @click="addfriend" v-preventReClick="4000" class="mui-table-view-cell">
+            <a class="">
+                添加好友
+            </a>
+        </li>
+        <li @click="joincom" class="mui-table-view-cell">
+            <a class="">
+                加入群聊
+            </a>
+        </li>
+        <li @click="createCom" class="mui-table-view-cell">
+            <a class="">
+                创建群聊
+            </a>
+        </li>
+    </ul>
+    <!-- <ul class="mui-table-view" style="margin-top: 25px;">
+        <li  @tap="showweixin" class="mui-table-view-cell">
+            <a class="">
+                获取最新代码
+            </a>
+        </li>
+    </ul> -->
+    <ul class="mui-table-view" style="margin-top: 25px;">
+        <li @click="quit" class="mui-table-view-cell">
+            <a style="text-align: center;color: #FF3B30;">
+                退出登录
+            </a>
+        </li>
+    </ul>
+</div>
+{{end}}

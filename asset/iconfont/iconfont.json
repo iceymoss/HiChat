@@ -1,0 +1,100 @@
+{
+  "id": "",
+  "name": "",
+  "font_family": "iconfont",
+  "css_prefix_text": "icon-",
+  "description": "",
+  "glyphs": [
+    {
+      "icon_id": "1116",
+      "name": "账户",
+      "font_class": "zhanghu",
+      "unicode": "f00bb",
+      "unicode_decimal": 983227
+    },
+    {
+      "icon_id": "1240",
+      "name": "图片",
+      "font_class": "tupian",
+      "unicode": "f0137",
+      "unicode_decimal": 983351
+    },
+    {
+      "icon_id": "1283",
+      "name": "视频",
+      "font_class": "shipin",
+      "unicode": "f0162",
+      "unicode_decimal": 983394
+    },
+    {
+      "icon_id": "145699",
+      "name": "电话_填充",
+      "font_class": "dianhuatianchong",
+      "unicode": "e678",
+      "unicode_decimal": 59000
+    },
+    {
+      "icon_id": "577312",
+      "name": "加号",
+      "font_class": "jiahao",
+      "unicode": "e726",
+      "unicode_decimal": 59174
+    },
+    {
+      "icon_id": "579598",
+      "name": "红包",
+      "font_class": "hongbao",
+      "unicode": "e784",
+      "unicode_decimal": 59268
+    },
+    {
+      "icon_id": "993873",
+      "name": "语音",
+      "font_class": "yuyin",
+      "unicode": "e6e1",
+      "unicode_decimal": 59105
+    },
+    {
+      "icon_id": "1025053",
+      "name": "键盘",
+      "font_class": "jianpan",
+      "unicode": "e608",
+      "unicode_decimal": 58888
+    },
+    {
+      "icon_id": "1299910",
+      "name": "Expression-1",
+      "font_class": "7biaoqing-1",
+      "unicode": "e667",
+      "unicode_decimal": 58983
+    },
+    {
+      "icon_id": "1727477",
+      "name": "237拍照",
+      "font_class": "paizhao",
+      "unicode": "e8d1",
+      "unicode_decimal": 59601
+    },
+    {
+      "icon_id": "5353505",
+      "name": "导航地址",
+      "font_class": "daohangdizhi",
+      "unicode": "e65e",
+      "unicode_decimal": 58974
+    },
+    {
+      "icon_id": "8361763",
+      "name": "发送",
+      "font_class": "fasong",
+      "unicode": "e6bd",
+      "unicode_decimal": 59069
+    },
+    {
+      "icon_id": "15727005",
+      "name": "转账",
+      "font_class": "zhuanzhang",
+      "unicode": "e663",
+      "unicode_decimal": 58979
+    }
+  ]
+}

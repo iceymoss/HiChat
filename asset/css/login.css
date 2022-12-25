@@ -1,0 +1,132 @@
+.login-page,.register-page{
+  padding: 45px 40px 60px;
+  background-color: #fff;
+  height: 100vh;
+}
+.login-from .mui-input-row,.register-page .mui-input-row{
+  margin-top: 26px;
+  position: relative;
+  display: flex;
+  height: 41px;
+  line-height: 41px;
+  align-items: center;
+  padding: 0 20px;
+  color: #333;
+  background: #f8f8f8;
+  border-radius: 20px;
+  display: flex;
+  font-family: PingFang SC;
+  justify-content: space-between;
+}
+.login-from  .mui-input-row input,.register-page .mui-input-row input,
+.createcom .mui-input-row input{
+  font-size: 14px;
+}
+.login-from .mui-input-row input::placeholder,.register-page .mui-input-row input::placeholder,
+.createcom .mui-input-row input::placeholder{
+  color: #ccc;
+}
+.login-from .mui-input-row::after,.register-page .mui-input-row::after{
+  display: none;
+}
+.mui-input-group::before,.mui-input-group::after{
+  display: none;
+}
+.area {
+    margin: 20px auto 0px auto;
+}
+
+
+.mui-input-group {
+    margin-top: 10px;
+}
+
+.mui-input-group:first-child {
+    margin-top: 20px;
+}
+
+.mui-input-group label {
+    width: 22%;
+}
+
+.mui-input-row label~input,
+.mui-input-row label~select,
+.mui-input-row label~textarea {
+    width: 78%;
+}
+
+.mui-checkbox input[type=checkbox],
+.mui-radio input[type=radio] {
+    top: 6px;
+}
+
+.mui-content-padded {
+    margin: 0;
+    margin-top: 25px;
+}
+
+.mui-content-padded .btn-login,.btn-register,.btn-confirm{
+  height: 41px;
+  line-height: 21px;
+  background: #fb3a4e;
+  border-radius: 20px;
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
+  text-align: center;
+  border: none;
+}
+
+.mui-btn {
+    padding: 10px;
+}
+
+.link-area {
+    display: block;
+    margin-top: 25px;
+    text-align: center;
+}
+
+.link-area a{
+  font-size: 12px;
+  color: #4c90ff;
+}
+
+.spliter {
+    color: #bbb;
+    padding: 0px 8px;
+}
+
+
+
+.oauth-area {
+    position: absolute;
+    bottom: 20px;
+    left: 0px;
+    text-align: center;
+    width: 100%;
+    padding: 0px;
+    margin: 0px;
+}
+
+.oauth-area .oauth-btn {
+    display: inline-block;
+    width: 50px;
+    height: 50px;
+    background-size: 30px 30px;
+    background-position: center center;
+    background-repeat: no-repeat;
+    margin: 0px 20px;
+    /*-webkit-filter: grayscale(100%); */
+    border: solid 1px #ddd;
+    border-radius: 25px;
+}
+
+.oauth-area .oauth-btn:active {
+    border: solid 1px #aaa;
+}
+
+.oauth-area .oauth-btn.disabled {
+    background-color: #ddd;
+}
+

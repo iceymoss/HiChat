@@ -14,20 +14,27 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	//
+	//rel := models.Relation{}
+	//
+	//rel.OwnerId = 9
+	//rel.Type = 1
+	//rel.TargetID = 12
+	//db.Create(&rel)
 
-	//err = db.AutoMigrate(&models.UserBasic{})
-	//if err != nil {
-	//	panic(err)
-	//}
+	err = db.AutoMigrate(&models.Community{})
+	if err != nil {
+		panic(err)
+	}
 	//err = db.AutoMigrate(&models.Message{}, &models.GroupInfo{}, &models.Relation{})
 	//if err != nil {
 	//	panic(err)
 	//}
 
-	err = db.AutoMigrate(&models.Message{})
-	if err != nil {
-		panic(err)
-	}
+	//err = db.AutoMigrate(&models.Message{})
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	//user := models.UserBasic{}
 	//user.Name = "iceymoss"

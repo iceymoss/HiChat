@@ -42,7 +42,7 @@ func LoginByNameAndPassWord(ctx *gin.Context) {
 	password := ctx.PostForm("password")
 	data := dao.FindUserByName(name)
 	if data.Name == "" {
-		ctx.JSON(http.StatusNotFound, gin.H{
+		ctx.JSON(200, gin.H{
 			"code":    -1,
 			"message": "用户名不存在",
 		})
@@ -51,7 +51,7 @@ func LoginByNameAndPassWord(ctx *gin.Context) {
 
 	ok := common.CheckPassWord(password, data.Salt, data.PassWord)
 	if !ok {
-		ctx.JSON(http.StatusBadRequest, gin.H{
+		ctx.JSON(200, gin.H{
 			"code":    -1,
 			"message": "密码错误",
 		})
@@ -66,7 +66,8 @@ func LoginByNameAndPassWord(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "登录成功",
-		"token":   Rsp.Identity,
+		"tokens":  Rsp.Identity,
+		"userId":  Rsp.ID,
 	})
 }
 

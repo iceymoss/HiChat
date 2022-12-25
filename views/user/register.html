@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1,user-scalable=no">
+    <title>IM解决方案</title>
+    <link rel="stylesheet" href="../../asset/plugins/mui/css/mui.css" />
+    <link rel="stylesheet" href="../../asset/css/login.css" />
+    <link rel="icon" href="../../asset/images/favicon.ico" type="image/x-icon" />
+    <script src="../../asset/plugins/mui/js/mui.js"></script>
+    <script src="../../asset/js/vue.min.js"></script>
+    <script src="../../asset/js/util.js"></script>
+</head>
+
+<body>
+
+    <header class="mui-bar mui-bar-nav">
+        <h1 class="mui-title">注册</h1>
+    </header>
+    {{.}}
+    <div class="mui-content register-page" id="pageapp">
+        <form id='login-form' class="mui-input-group register-form">
+            <div class="mui-input-row">
+                <input v-model="user.name" placeholder="请输入用户名" type="text" class="mui-input-clear mui-input">
+            </div>
+            <div class="mui-input-row">
+                <input v-model="user.password" placeholder="请输入密码" type="password" class="mui-input-clear mui-input">
+            </div>
+            <div class="mui-input-row">
+                <input v-model="user.Identity" placeholder="再输入密码" type="password" class="mui-input-clear mui-input">
+            </div>
+        </form>
+        <div class="mui-content-padded">
+            <button @click="login" type="button" class="mui-btn mui-btn-block mui-btn-primary btn-register">注册</button>
+            <div class="link-area"><a id='reg' href="/index">登录账号</a> <span class="spliter">|</span> <a
+                    id='forgetPassword'>忘记密码</a>
+            </div>
+        </div>
+        <div class="mui-content-padded oauth-area">
+        </div>
+    </div>
+</body>
+
+</html>
+<script>
+    var app = new Vue({
+        el: "#pageapp",
+        data: function () {
+            return {
+                user: {
+                    name: "",
+                    password: "",
+                    Identity: "",
+                }
+            }
+        },
+        methods: {
+            login: function () {
+                //检测密码是否为空
+                console.log(this.user)
+                //网络请求
+                //封装了promis
+                util.post("/v1/user/new", this.user).then(res => {
+                    console.log(res)
+                    if (res.code != 0) {
+                        mui.toast(res.message)
+                    } else {
+                        //location.replace("localhost:8081")
+                        location.href = "/"
+                        mui.toast("注册成功,即将跳转")
+                    }
+                })
+            },
+        }
+    })
+</script>

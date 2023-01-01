@@ -57,6 +57,26 @@ func GetCommunityList(ownerId uint) (*[]models.Community, error) {
 	return &community, nil
 }
 
-func JoinCommunity() {
+func JoinCommunity(ownerId uint, cname string) (int, error) {
+	community := models.Community{}
+	if tx := global.DB.Where("name = ?", cname).First(&community); tx.RowsAffected == 0 {
+		return -1, errors.New("群记录不存在")
+	}
 
+	//重复加群
+	relation := models.Relation{}
+	if tx := global.DB.Where("owner_id = ? and target_id = ? and type = 2", ownerId, community.ID).First(&relation); tx.RowsAffected == 1 {
+		return -1, errors.New("该群已经加入")
+	}
+
+	relation = models.Relation{}
+	relation.OwnerId = ownerId
+	relation.TargetID = community.ID
+	relation.Type = 2
+
+	if tx := global.DB.Create(&relation); tx.RowsAffected == 0 {
+		return -1, errors.New("加入失败")
+	}
+
+	return 0, nil
 }

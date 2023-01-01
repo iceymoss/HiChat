@@ -32,7 +32,10 @@ func FriendList(userId uint) (*[]models.UserBasic, error) {
 
 //AddFriendByName 昵称加好友
 func AddFriendByName(userId uint, targetName string) (int, error) {
-	user := FindUserByName(targetName)
+	user, err := FindUserByName(targetName)
+	if err != nil {
+		return -1, errors.New("该用户不存在")
+	}
 	if user.ID == 0 {
 		zap.S().Info("未查询到用户")
 		return -1, errors.New("该用户不存在")
@@ -47,7 +50,10 @@ func AddFriend(userID, TargetId uint) (int, error) {
 		return -2, errors.New("userID和TargetId相等")
 	}
 	//通过id查询用户
-	targetUser := FindUserID(TargetId)
+	targetUser, err := FindUserID(TargetId)
+	if err != nil {
+		return -1, errors.New("未查询到用户")
+	}
 	if targetUser.ID == 0 {
 		zap.S().Info("未查询到用户")
 		return -1, errors.New("未查询到用户")

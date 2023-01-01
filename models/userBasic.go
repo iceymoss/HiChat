@@ -17,7 +17,7 @@ type UserBasic struct {
 	Model
 	Name          string
 	PassWord      string
-	Avatar        string `valid:"url"`
+	Avatar        string
 	Gender        string `gorm:"column:gender;default:male;type:varchar(6) comment 'male表示男， famale表示女'"`
 	Phone         string `valid:"matches(^1[3-9]{1}\\d{9}$)"`
 	Email         string `valid:"email"`

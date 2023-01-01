@@ -22,7 +22,7 @@ func main() {
 	//rel.TargetID = 12
 	//db.Create(&rel)
 
-	err = db.AutoMigrate(&models.Community{})
+	err = db.AutoMigrate(&models.UserBasic{})
 	if err != nil {
 		panic(err)
 	}

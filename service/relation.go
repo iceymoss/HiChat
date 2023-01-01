@@ -157,3 +157,77 @@ func NewGroup(ctx *gin.Context) {
 		"message": "键群成功",
 	})
 }
+
+func GroupList(ctx *gin.Context) {
+	owner := ctx.PostForm("ownerId")
+	ownerId, err := strconv.Atoi(owner)
+	if err != nil {
+		zap.S().Info("owner类型转换失败", err)
+		return
+	}
+
+	if ownerId == 0 {
+		ctx.JSON(200, gin.H{
+			"code":    -1, //  0成功   -1失败
+			"message": "您未登录",
+		})
+		return
+	}
+
+	rsp, err := dao.GetCommunityList(uint(ownerId))
+	if err != nil {
+		zap.S().Info("获取群列表失败", err)
+		ctx.JSON(200, gin.H{
+			"code":    -1, //  0成功   -1失败
+			"message": "你还没加入任何群聊",
+		})
+		return
+	}
+
+	common.RespOKList(ctx.Writer, rsp, len(*rsp))
+}
+
+func JoinGroup(ctx *gin.Context) {
+	comInfo := ctx.PostForm("comId")
+	if comInfo == "" {
+		ctx.JSON(200, gin.H{
+			"code":    -1, //  0成功   -1失败
+			"message": "群名称不能为空",
+		})
+		return
+	}
+
+	user := ctx.PostForm("userId")
+	userId, err := strconv.Atoi(user)
+	if err != nil {
+		zap.S().Info("user类型转换失败")
+	}
+	if userId == 0 {
+		ctx.JSON(200, gin.H{
+			"code":    -1, //  0成功   -1失败
+			"message": "你未登录",
+		})
+		return
+	}
+
+	code, err := dao.JoinCommunity(uint(userId), comInfo)
+	if err != nil {
+		HandleErr(code, ctx, err)
+		return
+	}
+
+	ctx.JSON(200, gin.H{
+		"code":    0, //  0成功   -1失败
+		"message": "加群成功",
+	})
+}
+
+func RedisMsg(c *gin.Context) {
+	userIdA, _ := strconv.Atoi(c.PostForm("userIdA"))
+	userIdB, _ := strconv.Atoi(c.PostForm("userIdB"))
+	start, _ := strconv.Atoi(c.PostForm("start"))
+	end, _ := strconv.Atoi(c.PostForm("end"))
+	isRev, _ := strconv.ParseBool(c.PostForm("isRev"))
+	res := models.RedisMsg(int64(userIdA), int64(userIdB), int64(start), int64(end), isRev)
+	common.RespOKList(c.Writer, "ok", res)
+}

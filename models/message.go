@@ -1,6 +1,8 @@
 package models
 
 import (
+	"HiChat/global"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -8,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 	"gopkg.in/fatih/set.v0"
@@ -51,20 +54,6 @@ func Chat(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("handle:", query)
 	Id := query.Get("userId")
 	//token := query.Get("token")
-
-	//targeId := query.Get("targetId")
-
-	fmt.Println("uID", Id)
-
-	//tarID, err := strconv.ParseInt(targeId, 10, 64)
-	//if err != nil {
-	//	zap.S().Info("类型转换失败", err)
-	//	return
-	//}
-
-	//content := query.Get("content")
-	//chatTyep := query.Get("chatType")
-	//msgType := query.Get("type")
 
 	userId, err := strconv.ParseInt(Id, 10, 64)
 	if err != nil {
@@ -136,6 +125,7 @@ func recProc(node *Node) {
 
 		dispatch(data)
 
+		//这里是简单实现的一种方法
 		//msg := Message{}
 		//err = json.Unmarshal(data, &msg)
 		//if err != nil {
@@ -241,10 +231,26 @@ func dispatch(data []byte) {
 	//判断消息类型
 	switch msg.Type {
 	case 1: //私聊
-		sendMsg(msg.TargetId, data)
+		sendMsgAndSave(msg.TargetId, data)
 	case 2: //群发
-		sendGroupMsg()
+		sendGroupMsg(uint(msg.FormId), uint(msg.TargetId), data)
 	}
+}
+
+//sendGroupMsg 群发
+func sendGroupMsg(formId, target uint, data []byte) (int, error) {
+	//群发的逻辑：1获取到群里所有用户，然后向除开自己的每一位用户发送消息
+	userIDs, err := FindUsers(target)
+	if err != nil {
+		return -1, err
+	}
+
+	for _, userId := range *userIDs {
+		if formId != userId {
+			sendMsgAndSave(int64(userId), data)
+		}
+	}
+	return 0, nil
 }
 
 //sendMs 向用户发送消息
@@ -264,4 +270,78 @@ func sendMsg(id int64, msg []byte) {
 	}
 }
 
-func sendGroupMsg() {}
+//sendMsgTest 发送消息 并存储聊天记录到redis
+func sendMsgAndSave(userId int64, msg []byte) {
+
+	rwLocker.RLock()
+	node, ok := clientMap[userId] //对方是否在线
+	rwLocker.RUnlock()
+
+	jsonMsg := Message{}
+	json.Unmarshal(msg, &jsonMsg)
+	ctx := context.Background()
+	targetIdStr := strconv.Itoa(int(userId))
+	userIdStr := strconv.Itoa(int(jsonMsg.FormId))
+
+	//如果不在线
+	if ok {
+		zap.S().Info(userId, "不在线， 没有对应的node,")
+
+		node.DataQueue <- msg
+	}
+
+	//拼接记录名称
+	var key string
+	if userId > jsonMsg.FormId {
+		key = "msg_" + userIdStr + "_" + targetIdStr
+	} else {
+		key = "msg_" + targetIdStr + "_" + userIdStr
+	}
+
+	//创建记录
+	res, err := global.RedisDB.ZRevRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	//将聊天记录写入数据库
+	score := float64(cap(res)) + 1
+	ress, e := global.RedisDB.ZAdd(ctx, key, &redis.Z{score, msg}).Result() //jsonMsg
+	//res, e := utils.Red.Do(ctx, "zadd", key, 1, jsonMsg).Result() //备用 后续拓展 记录完整msg
+	if e != nil {
+		fmt.Println(e)
+	}
+	fmt.Println(ress)
+}
+
+//MarshalBinary 需要重写此方法才能完整的msg转byte[]
+func (msg Message) MarshalBinary() ([]byte, error) {
+	return json.Marshal(msg)
+}
+
+//RedisMsg 获取缓存里面的消息
+func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) []string {
+	ctx := context.Background()
+	userIdStr := strconv.Itoa(int(userIdA))
+	targetIdStr := strconv.Itoa(int(userIdB))
+
+	//拼接key
+	var key string
+	if userIdA > userIdB {
+		key = "msg_" + targetIdStr + "_" + userIdStr
+	} else {
+		key = "msg_" + userIdStr + "_" + targetIdStr
+	}
+
+	var rels []string
+	var err error
+	if isRev {
+		rels, err = global.RedisDB.ZRange(ctx, key, start, end).Result()
+	} else {
+		rels, err = global.RedisDB.ZRevRange(ctx, key, start, end).Result()
+	}
+	if err != nil {
+		fmt.Println(err) //没有找到
+	}
+	return rels
+}

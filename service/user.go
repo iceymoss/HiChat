@@ -1,9 +1,6 @@
 package service
 
 import (
-	"HiChat/common"
-	"HiChat/dao"
-	"HiChat/models"
 	"fmt"
 	"log"
 	"math/rand"
@@ -11,12 +8,15 @@ import (
 	"strconv"
 	"time"
 
+	"HiChat/common"
+	"HiChat/dao"
+	"HiChat/middlewear"
+	"HiChat/models"
+
 	"github.com/asaskevich/govalidator"
-	"github.com/gorilla/websocket"
-
-	"go.uber.org/zap"
-
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 )
 
 //List 获取用户列表
@@ -26,7 +26,14 @@ import (
 // @Accept json
 // @Router /user/list [get]
 func List(ctx *gin.Context) {
-	list := dao.GetUserList()
+	list, err := dao.GetUserList()
+	if err != nil {
+		ctx.JSON(200, gin.H{
+			"code":    -1, //0 表示成功， -1 表示失败
+			"message": "获取用户列表失败",
+		})
+		return
+	}
 	ctx.JSON(http.StatusOK, list)
 }
 
@@ -40,7 +47,15 @@ func List(ctx *gin.Context) {
 func LoginByNameAndPassWord(ctx *gin.Context) {
 	name := ctx.PostForm("name")
 	password := ctx.PostForm("password")
-	data := dao.FindUserByName(name)
+	data, err := dao.FindUserByName(name)
+	if err != nil {
+		ctx.JSON(200, gin.H{
+			"code":    -1, //0 表示成功， -1 表示失败
+			"message": "登录失败",
+		})
+		return
+	}
+
 	if data.Name == "" {
 		ctx.JSON(200, gin.H{
 			"code":    -1,
@@ -63,10 +78,16 @@ func LoginByNameAndPassWord(ctx *gin.Context) {
 		zap.S().Info("登录失败", err)
 	}
 
+	token, err := middlewear.GenerateToken(Rsp.ID, "yk")
+	if err != nil {
+		zap.S().Info("生成token失败", err)
+		return
+	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"code":    0,
 		"message": "登录成功",
-		"tokens":  Rsp.Identity,
+		"tokens":  token,
 		"userId":  Rsp.ID,
 	})
 }
@@ -84,7 +105,6 @@ func NewUser(ctx *gin.Context) {
 	user.Name = ctx.Request.FormValue("name")
 	password := ctx.Request.FormValue("password")
 	repassword := ctx.Request.FormValue("Identity")
-	fmt.Println(user.Name, "  >>>>>>>>>>>  ", password, repassword)
 
 	if user.Name == "" || password == "" || repassword == "" {
 		ctx.JSON(200, gin.H{
@@ -96,8 +116,8 @@ func NewUser(ctx *gin.Context) {
 	}
 
 	//查询用户是否存在
-	data := dao.FindUserByName(user.Name)
-	if data.Name != "" {
+	_, err := dao.FindUser(user.Name)
+	if err != nil {
 		ctx.JSON(200, gin.H{
 			"code":    -1,
 			"message": "该用户已注册",
@@ -132,7 +152,7 @@ func NewUser(ctx *gin.Context) {
 	})
 }
 
-// UpdateUser
+// UpdataUser
 // @Summary 更新用户
 // @Tags 用户模块
 // @param id formData string false "userID"
@@ -144,7 +164,7 @@ func NewUser(ctx *gin.Context) {
 // @param phone formData string false "电话"
 // @Success 200 {string} json{"code","message"}
 // @Router /user/updata [put]
-func UpdateUser(ctx *gin.Context) {
+func UpdataUser(ctx *gin.Context) {
 	user := models.UserBasic{}
 
 	id, err := strconv.Atoi(ctx.Request.FormValue("id"))
@@ -161,7 +181,7 @@ func UpdateUser(ctx *gin.Context) {
 	PassWord := ctx.Request.FormValue("password")
 	Email := ctx.Request.FormValue("email")
 	Phone := ctx.Request.FormValue("phone")
-	avatar := ctx.Request.FormValue("avatar")
+	avatar := ctx.Request.FormValue("icon")
 	gender := ctx.Request.FormValue("gender")
 	if Name != "" {
 		user.Name = Name
@@ -313,6 +333,24 @@ func MsgHandler(ctx *gin.Context, ws *websocket.Conn) {
 	}
 }
 
+//SendUserMsg 发送消息
 func SendUserMsg(ctx *gin.Context) {
 	models.Chat(ctx.Writer, ctx.Request)
+}
+
+func ExitUser(ctx *gin.Context) {
+	id, err := strconv.Atoi(ctx.Query("id"))
+	if err != nil {
+		zap.S().Info("类型转换失败", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"code":    -1, //  0成功   -1失败
+			"message": "注销账号失败",
+		})
+		return
+	}
+
+	_, err = middlewear.GenerateToken(uint(id), "exit")
+	if err != nil {
+		zap.S().Info("")
+	}
 }

@@ -1,23 +1,23 @@
 package dao
 
 import (
-	"HiChat/common"
-	"HiChat/global"
-	"HiChat/models"
 	"errors"
 	"strconv"
 	"time"
 
+	"HiChat/common"
+	"HiChat/global"
+	"HiChat/models"
+
 	"go.uber.org/zap"
 )
 
-func GetUserList() []*models.UserBasic {
+func GetUserList() ([]*models.UserBasic, error) {
 	var list []*models.UserBasic
 	if tx := global.DB.Find(&list); tx.RowsAffected == 0 {
-		zap.S().Info("获取用户失败")
-		return nil
+		return nil, errors.New("获取用户列表失败")
 	}
-	return list
+	return list, nil
 }
 
 //查询用户:根据昵称，根据电话，根据邮件
@@ -37,38 +37,54 @@ func FindUserByNameAndPwd(name string, password string) (*models.UserBasic, erro
 	return &user, nil
 }
 
-func FindUserByName(name string) models.UserBasic {
+func FindUserByName(name string) (*models.UserBasic, error) {
 	user := models.UserBasic{}
-	global.DB.Where("name = ?", name).First(&user)
-	return user
+	if tx := global.DB.Where("name = ?", name).First(&user); tx.RowsAffected == 0 {
+		return nil, errors.New("没有查询到记录")
+	}
+	return &user, nil
 }
 
-func FindUserByPhone(phone string) models.UserBasic {
+func FindUser(name string) (*models.UserBasic, error) {
 	user := models.UserBasic{}
-	global.DB.Where("phone = ?", phone).First(&user)
-	return user
+	if tx := global.DB.Where("name = ?", name).First(&user); tx.RowsAffected == 1 {
+		return nil, errors.New("没有查询到记录")
+	}
+	return &user, nil
 }
 
-func FindUerByEmail(email string) models.UserBasic {
+func FindUserByPhone(phone string) (*models.UserBasic, error) {
 	user := models.UserBasic{}
-	global.DB.Where("email = ?", email).First(&user)
-	return user
+	if tx := global.DB.Where("phone = ?", phone).First(&user); tx.RowsAffected == 0 {
+		return nil, errors.New("未查询到记录")
+	}
+	return &user, nil
 }
 
-func FindUserID(ID uint) models.UserBasic {
+func FindUerByEmail(email string) (*models.UserBasic, error) {
 	user := models.UserBasic{}
-	global.DB.Where(ID).First(&user)
-	return user
+	if tx := global.DB.Where("email = ?", email).First(&user); tx.RowsAffected == 0 {
+		return nil, errors.New("未查询到记录")
+	}
+	return &user, nil
+}
+
+func FindUserID(ID uint) (*models.UserBasic, error) {
+	user := models.UserBasic{}
+	if tx := global.DB.Where(ID).First(&user); tx.RowsAffected == 0 {
+		return nil, errors.New("未查询到记录")
+	}
+	return &user, nil
 }
 
 //CreateUser 新建用户
-func CreateUser(user models.UserBasic) *models.UserBasic {
+func CreateUser(user models.UserBasic) (*models.UserBasic, error) {
 	tx := global.DB.Create(&user)
 	if tx.RowsAffected == 0 {
 		zap.S().Info("新建用户失败")
-		return nil
+		return nil, errors.New("新增用户失败")
 	}
-	return &user
+	return &user, nil
 }
 
 func UpdateUser(user models.UserBasic) (*models.UserBasic, error) {

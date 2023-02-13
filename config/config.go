@@ -15,6 +15,7 @@ type RedisConfig struct {
 }
 
 type ServiceConfig struct {
+	Port    int         `mapstructure:"port" json:"port"`
 	DB      MysqlConfig `mapstructure:"mysql" json:"mysql"`
 	RedisDB RedisConfig `mapstructure:"redis" json:"redis"`
 }

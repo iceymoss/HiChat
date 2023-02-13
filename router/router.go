@@ -24,8 +24,8 @@ func Router() *gin.Engine {
 	user := v1.Group("user")
 	{
 		user.GET("/list", middlewear.JWY(), service.List)
-		user.POST("/login_pw", middlewear.JWY(), service.LoginByNameAndPassWord)
-		user.POST("/new", middlewear.JWY(), service.NewUser)
+		user.POST("/login_pw", service.LoginByNameAndPassWord)
+		user.POST("/new", service.NewUser)
 		user.DELETE("/delete", middlewear.JWY(), service.DeleteUser)
 		user.POST("/updata", middlewear.JWY(), service.UpdataUser)
 		user.GET("/ws", middlewear.JWY(), service.SendMsg)
@@ -42,7 +42,7 @@ func Router() *gin.Engine {
 	relation := v1.Group("relation").Use(middlewear.JWY())
 	{
 		relation.POST("/list", service.FriendList)
-		relation.POST("/add", service.AddFriendByID)
+		relation.POST("/add", service.AddFriendByName)
 		relation.POST("/new_group", service.NewGroup)
 		relation.POST("/group_list", service.GroupList)
 		relation.POST("/join_group", service.JoinGroup)

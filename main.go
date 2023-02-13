@@ -2,8 +2,10 @@ package main
 
 import (
 	_ "HiChat/docs"
+	"HiChat/global"
 	"HiChat/initialize"
 	"HiChat/router"
+	"fmt"
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -25,5 +27,6 @@ func main() {
 
 	router := router.Router()
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-	router.Run(":8000")
+
+	router.Run(fmt.Sprintf(":%d", global.ServiceConfig.Port))
 }

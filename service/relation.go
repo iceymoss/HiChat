@@ -1,10 +1,11 @@
 package service
 
 import (
+	"strconv"
+
 	"HiChat/common"
 	"HiChat/dao"
 	"HiChat/models"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -47,8 +48,8 @@ func FriendList(ctx *gin.Context) {
 	common.RespOKList(ctx.Writer, users, len(infos))
 }
 
-//AddFriendByID 通过加好友
-func AddFriendByID(ctx *gin.Context) {
+//AddFriendByName 通过加好友
+func AddFriendByName(ctx *gin.Context) {
 	user := ctx.PostForm("userId")
 	userId, err := strconv.Atoi(user)
 	if err != nil {

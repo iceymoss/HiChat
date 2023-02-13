@@ -1,18 +1,17 @@
 package initialize
 
 import (
-	"HiChat/global"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"HiChat/global"
+
 	"github.com/go-redis/redis/v8"
-
-	"gorm.io/gorm/logger"
-
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 func InitDB() {

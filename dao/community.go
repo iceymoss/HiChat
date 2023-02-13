@@ -34,6 +34,7 @@ func CreateCommunity(community models.Community) (int, error) {
 	return 0, nil
 }
 
+//GetCommunityList 获取群列表
 func GetCommunityList(ownerId uint) (*[]models.Community, error) {
 
 	//获取我加入的群
@@ -57,6 +58,7 @@ func GetCommunityList(ownerId uint) (*[]models.Community, error) {
 	return &community, nil
 }
 
+//JoinCommunity 根据群昵称搜索并加入群
 func JoinCommunity(ownerId uint, cname string) (int, error) {
 	community := models.Community{}
 	if tx := global.DB.Where("name = ?", cname).First(&community); tx.RowsAffected == 0 {

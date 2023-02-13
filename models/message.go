@@ -1,7 +1,6 @@
 package models
 
 import (
-	"HiChat/global"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+
+	"HiChat/global"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
@@ -82,7 +83,6 @@ func Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//用户关系
-	//todo
 
 	//将userId和Node绑定
 	rwLocker.Lock()
@@ -123,7 +123,9 @@ func recProc(node *Node) {
 			return
 		}
 
-		dispatch(data)
+		//dispatch(data)
+
+		brodMsg(data)
 
 		//这里是简单实现的一种方法
 		//msg := Message{}

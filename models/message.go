@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
 	"HiChat/global"
 
@@ -34,7 +36,7 @@ func (m *Message) MsgTableName() string {
 	return "message"
 }
 
-//Node 构造连接
+// Node 构造连接
 type Node struct {
 	Conn      *websocket.Conn //连接
 	Addr      string          //客户端地址
@@ -42,13 +44,13 @@ type Node struct {
 	GroupSets set.Interface   //好友 / 群
 }
 
-//映射关系
+// 映射关系
 var clientMap map[int64]*Node = make(map[int64]*Node, 0)
 
-//读写锁
+// 读写锁
 var rwLocker sync.RWMutex
 
-//Chat	需要 ：发送者ID ，接受者ID ，消息类型，发送的内容，发送类型
+// Chat	需要 ：发送者ID ，接受者ID ，消息类型，发送的内容，发送类型
 func Chat(w http.ResponseWriter, r *http.Request) {
 	//1.  获取参数 并 检验 token 等合法性
 	query := r.URL.Query()
@@ -83,7 +85,6 @@ func Chat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//用户关系
-
 	//将userId和Node绑定
 	rwLocker.Lock()
 	clientMap[userId] = node
@@ -162,7 +163,7 @@ func init() {
 	go UpdRecProc()
 }
 
-//UdpSendProc 完成upd数据发送
+// UdpSendProc 完成upd数据发送
 func UdpSendProc() {
 	udpConn, err := net.DialUDP("udp", nil, &net.UDPAddr{
 		//192.168.31.147
@@ -191,7 +192,7 @@ func UdpSendProc() {
 
 }
 
-//UpdRecProc 完成udp数据的接收
+// UpdRecProc 完成udp数据的接收
 func UpdRecProc() {
 	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
@@ -228,8 +229,8 @@ func dispatch(data []byte) {
 		return
 	}
 
-	fmt.Println("解析数据:", msg, "msg.FormId", msg.FormId, "targetId:", msg.TargetId, "type:", msg.Type)
-
+	fmt.Println("解析数据:", "msg.FormId", msg.FormId, "targetId:", msg.TargetId, "type:", msg.Type)
+	//fmt.Println("消息类型：", msg.Type, msg.Content)
 	//判断消息类型
 	switch msg.Type {
 	case 1: //私聊
@@ -239,7 +240,7 @@ func dispatch(data []byte) {
 	}
 }
 
-//sendGroupMsg 群发
+// sendGroupMsg 群发
 func sendGroupMsg(formId, target uint, data []byte) (int, error) {
 	//群发的逻辑：1获取到群里所有用户，然后向除开自己的每一位用户发送消息
 	userIDs, err := FindUsers(target)
@@ -255,7 +256,7 @@ func sendGroupMsg(formId, target uint, data []byte) (int, error) {
 	return 0, nil
 }
 
-//sendMs 向用户发送消息
+// sendMs 向用户发送消息
 func sendMsg(id int64, msg []byte) {
 	rwLocker.Lock()
 	node, ok := clientMap[id]
@@ -272,7 +273,7 @@ func sendMsg(id int64, msg []byte) {
 	}
 }
 
-//sendMsgTest 发送消息 并存储聊天记录到redis
+// sendMsgTest 发送消息 并存储聊天记录到redis
 func sendMsgAndSave(userId int64, msg []byte) {
 
 	rwLocker.RLock()
@@ -285,10 +286,8 @@ func sendMsgAndSave(userId int64, msg []byte) {
 	targetIdStr := strconv.Itoa(int(userId))
 	userIdStr := strconv.Itoa(int(jsonMsg.FormId))
 
-	//如果不在线
+	//如果在线，需要即时推送
 	if ok {
-		zap.S().Info(userId, "不在线， 没有对应的node,")
-
 		node.DataQueue <- msg
 	}
 
@@ -304,6 +303,7 @@ func sendMsgAndSave(userId int64, msg []byte) {
 	res, err := global.RedisDB.ZRevRange(ctx, key, 0, -1).Result()
 	if err != nil {
 		fmt.Println(err)
+		return
 	}
 
 	//将聊天记录写入数据库
@@ -312,16 +312,27 @@ func sendMsgAndSave(userId int64, msg []byte) {
 	//res, e := utils.Red.Do(ctx, "zadd", key, 1, jsonMsg).Result() //备用 后续拓展 记录完整msg
 	if e != nil {
 		fmt.Println(e)
+		return
 	}
+
+	// 设置ZSET的过期时间为1小时（3600秒）
+	expirationTime := 24 * time.Hour * 30
+	_, expireErr := global.RedisDB.Expire(ctx, key, expirationTime).Result()
+	if expireErr != nil {
+		fmt.Println(expireErr)
+		return
+	}
+
+	fmt.Println("ZSET的过期时间已设置为1小时")
 	fmt.Println(ress)
 }
 
-//MarshalBinary 需要重写此方法才能完整的msg转byte[]
+// MarshalBinary 需要重写此方法才能完整的msg转byte[]
 func (msg Message) MarshalBinary() ([]byte, error) {
 	return json.Marshal(msg)
 }
 
-//RedisMsg 获取缓存里面的消息
+// RedisMsg 获取缓存里面的消息
 func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) []string {
 	ctx := context.Background()
 	userIdStr := strconv.Itoa(int(userIdA))
@@ -345,5 +356,33 @@ func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) 
 	if err != nil {
 		fmt.Println(err) //没有找到
 	}
+	fmt.Println("聊天记录：", rels)
 	return rels
+}
+
+func WriteDB(key string) {
+	ctx := context.Background()
+	chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
+	if err != nil {
+		fmt.Println("从Redis获取聊天记录失败:", err)
+		return
+	}
+
+	// 处理聊天记录并从Redis中删除记录
+	msg := make([]Message, 0)
+	for _, record := range chatRecords {
+		fmt.Println("---------------------------")
+		jsonMsg := Message{}
+		err := json.Unmarshal([]byte(record), &jsonMsg)
+		if err != nil {
+			log.Println("Unmarshal fail")
+			return
+		}
+		msg = append(msg, jsonMsg)
+	}
+	if err := global.DB.Table("messages").Save(msg).Error; err != nil {
+		log.Println("数据持久化失败：", err.Error())
+		return
+	}
+	fmt.Println("持久化成功")
 }

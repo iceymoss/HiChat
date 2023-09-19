@@ -4,11 +4,8 @@ import (
 	_ "HiChat/docs"
 	"HiChat/global"
 	"HiChat/initialize"
-	"HiChat/models"
 	"HiChat/router"
 	"fmt"
-	"time"
-
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
@@ -30,8 +27,6 @@ func main() {
 	router := router.Router()
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	go router.Run(fmt.Sprintf(":%d", global.ServiceConfig.Port))
+	router.Run(fmt.Sprintf(":%d", global.ServiceConfig.Port))
 
-	time.Sleep(120 * time.Second)
-	models.WriteDB("msg_7_8")
 }

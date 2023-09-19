@@ -316,7 +316,7 @@ func sendMsgAndSave(userId int64, msg []byte) {
 	}
 
 	// 设置ZSET的过期时间为1小时（3600秒）
-	expirationTime := 24 * time.Hour * 30
+	expirationTime := 24 * time.Hour * 7
 	_, expireErr := global.RedisDB.Expire(ctx, key, expirationTime).Result()
 	if expireErr != nil {
 		fmt.Println(expireErr)
@@ -325,6 +325,9 @@ func sendMsgAndSave(userId int64, msg []byte) {
 
 	fmt.Println("ZSET的过期时间已设置为1小时")
 	fmt.Println(ress)
+
+	//持久到MySQL中
+	WriteDB(key)
 }
 
 // MarshalBinary 需要重写此方法才能完整的msg转byte[]
@@ -361,28 +364,48 @@ func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) 
 }
 
 func WriteDB(key string) {
-	ctx := context.Background()
-	chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
-	if err != nil {
-		fmt.Println("从Redis获取聊天记录失败:", err)
-		return
-	}
+	// 启动定时任务，每隔一定时间执行一次
+	//interval := 24 * time.Hour // 例如，每隔24小时执行一次
+	interval := 30 * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-	// 处理聊天记录并从Redis中删除记录
-	msg := make([]Message, 0)
-	for _, record := range chatRecords {
-		fmt.Println("---------------------------")
-		jsonMsg := Message{}
-		err := json.Unmarshal([]byte(record), &jsonMsg)
-		if err != nil {
-			log.Println("Unmarshal fail")
-			return
+	loseMsg := make([]Message, 0)
+	for {
+		select {
+		case <-ticker.C:
+			ctx := context.Background()
+			chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
+			if err != nil {
+				fmt.Println("从Redis获取聊天记录失败:", err)
+				continue
+			}
+
+			msg := make([]Message, 0)
+			// 处理聊天记录并从Redis中删除记录
+			for _, record := range chatRecords {
+				fmt.Println("---------------------------")
+				m := Message{}
+				err := json.Unmarshal([]byte(record), &m)
+				if err != nil {
+					log.Println("Unmarshal fail")
+					return
+				}
+				msg = append(msg, m)
+				// 从Redis中删除记录
+				if err = global.RedisDB.ZRem(ctx, key, record).Err(); err != nil {
+					fmt.Println("从Redis删除聊天记录失败:", err)
+					continue
+				}
+			}
+			msg = append(msg, loseMsg...)
+			if err := global.DB.Table("messages").Save(msg).Error; err != nil {
+				log.Println("持久化失败")
+				loseMsg = append(loseMsg, msg...)
+				return
+			}
+			loseMsg = []Message{}
+
 		}
-		msg = append(msg, jsonMsg)
 	}
-	if err := global.DB.Table("messages").Save(msg).Error; err != nil {
-		log.Println("数据持久化失败：", err.Error())
-		return
-	}
-	fmt.Println("持久化成功")
 }

@@ -8,4 +8,3 @@ mysql:
 redis:
   host: '1.14.180.202'
   port: '6379'
-

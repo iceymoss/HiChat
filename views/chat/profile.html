@@ -10,18 +10,12 @@
                 :src="info.icon || '/asset/images/avatar0.png'">
             <div class="mui-media-body">
                 <span v-text="info.name">betatech</span>
-                <p class='mui-ellipsis' v-text="profile.memo">专业可靠的IM解决方案专家</p>
+                <p class='mui-ellipsis' v-text="profile.memo">hichat即时聊天</p>
             </div>
 
         </li>
     </ul>
     <ul class="mui-table-view">
-        <!-- <li class="mui-table-view-cell">
-            <a href="sysmsg.shtml" class="">
-                通知公告
-            </a>
-        </li> -->
-
         <li @click="addfriend" v-preventReClick="4000" class="mui-table-view-cell">
             <a class="">
                 添加好友
@@ -38,13 +32,6 @@
             </a>
         </li>
     </ul>
-    <!-- <ul class="mui-table-view" style="margin-top: 25px;">
-        <li  @tap="showweixin" class="mui-table-view-cell">
-            <a class="">
-                获取最新代码
-            </a>
-        </li>
-    </ul> -->
     <ul class="mui-table-view" style="margin-top: 25px;">
         <li @click="quit" class="mui-table-view-cell">
             <a style="text-align: center;color: #FF3B30;">

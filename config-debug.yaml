@@ -4,7 +4,7 @@ mysql:
   port: '3306'
   name: 'hi_chat'
   user: 'root'
-  password: 'password'
+  password: 'Qq/2013XiaoKUang'
 redis:
   host: '1.14.180.202'
   port: '6379'

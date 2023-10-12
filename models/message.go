@@ -366,15 +366,16 @@ func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) 
 func WriteDB(key string) {
 	// 启动定时任务，每隔一定时间执行一次
 	//interval := 24 * time.Hour // 例如，每隔24小时执行一次
-	interval := 30 * time.Second
+	interval := 2 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	loseMsg := make([]Message, 0)
+	ctx := context.Background()
 	for {
+		//多路复用，定时获取数据
 		select {
 		case <-ticker.C:
-			ctx := context.Background()
 			chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
 			if err != nil {
 				fmt.Println("从Redis获取聊天记录失败:", err)
@@ -382,6 +383,8 @@ func WriteDB(key string) {
 			}
 
 			msg := make([]Message, 0)
+			backMsg := make([]string, 0)
+
 			// 处理聊天记录并从Redis中删除记录
 			for _, record := range chatRecords {
 				fmt.Println("---------------------------")
@@ -392,12 +395,16 @@ func WriteDB(key string) {
 					return
 				}
 				msg = append(msg, m)
+				backMsg = append(backMsg, record)
+
 				// 从Redis中删除记录
-				if err = global.RedisDB.ZRem(ctx, key, record).Err(); err != nil {
-					fmt.Println("从Redis删除聊天记录失败:", err)
-					continue
-				}
+				//if err = global.RedisDB.ZRem(ctx, key, record).Err(); err != nil {
+				//	fmt.Println("从Redis删除聊天记录失败:", err)
+				//	continue
+				//}
+
 			}
+
 			msg = append(msg, loseMsg...)
 			if err := global.DB.Table("messages").Save(msg).Error; err != nil {
 				log.Println("持久化失败")

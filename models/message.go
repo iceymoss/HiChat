@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -18,6 +17,10 @@ import (
 	"go.uber.org/zap"
 	"gopkg.in/fatih/set.v0"
 )
+
+// 记录用户聊天key
+var saveKeyMutex sync.Mutex
+var saveKey []string
 
 type Message struct {
 	Model
@@ -92,7 +95,6 @@ func Chat(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("uid", userId)
 
-	//发送接收消息
 	//发送消息
 	go sendProc(node)
 	//接收消息
@@ -111,7 +113,6 @@ func sendProc(node *Node) {
 			}
 			fmt.Println("数据发送socket成功")
 		}
-
 	}
 }
 
@@ -123,8 +124,6 @@ func recProc(node *Node) {
 			zap.S().Info("读取消息失败", err)
 			return
 		}
-
-		//dispatch(data)
 
 		brodMsg(data)
 
@@ -147,7 +146,6 @@ func recProc(node *Node) {
 		//	tarNode.DataQueue <- data
 		//	fmt.Println("发送成功：", string(data))
 		//}
-
 	}
 }
 
@@ -155,7 +153,6 @@ var upSendChan chan []byte = make(chan []byte, 1024)
 
 func brodMsg(data []byte) {
 	upSendChan <- data
-
 }
 
 func init() {
@@ -315,7 +312,7 @@ func sendMsgAndSave(userId int64, msg []byte) {
 		return
 	}
 
-	// 设置ZSET的过期时间为1小时（3600秒）
+	// 设置ZSET的过期时间为10天
 	expirationTime := 24 * time.Hour * 7
 	_, expireErr := global.RedisDB.Expire(ctx, key, expirationTime).Result()
 	if expireErr != nil {
@@ -323,11 +320,11 @@ func sendMsgAndSave(userId int64, msg []byte) {
 		return
 	}
 
-	fmt.Println("ZSET的过期时间已设置为1小时")
+	fmt.Println("ZSET的过期时间已设置为10天")
 	fmt.Println(ress)
 
-	//持久到MySQL中
-	WriteDB(key)
+	//将key放入全局并
+	addKeyToSaveKey(key)
 }
 
 // MarshalBinary 需要重写此方法才能完整的msg转byte[]
@@ -363,56 +360,118 @@ func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) 
 	return rels
 }
 
-func WriteDB(key string) {
-	// 启动定时任务，每隔一定时间执行一次
-	//interval := 24 * time.Hour // 例如，每隔24小时执行一次
-	interval := 2 * time.Second
+// RecordPersistence 聊天记录持久化
+func RecordPersistence() {
+	ctx := context.Background()
+
+	//启动定时任务，每隔24小时执行一次
+	interval := 24 * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	loseMsg := make([]Message, 0)
-	ctx := context.Background()
+	// 创建一个通道用于控制并发，控制10个并发
+	concurrency := make(chan struct{}, 10)
+
+	zap.S().Info("----------持久化开始------------")
 	for {
 		//多路复用，定时获取数据
 		select {
 		case <-ticker.C:
-			chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
-			if err != nil {
-				fmt.Println("从Redis获取聊天记录失败:", err)
-				continue
-			}
+			zap.S().Info("持久化中")
+			// 处理数据持久化
+			msgKeys := getSaveKey()
+			go func(keys []string) {
 
-			msg := make([]Message, 0)
-			backMsg := make([]string, 0)
+				// 控制并发，10并发缓冲区满，G陷入阻塞
+				concurrency <- struct{}{}
+				defer func() {
 
-			// 处理聊天记录并从Redis中删除记录
-			for _, record := range chatRecords {
-				fmt.Println("---------------------------")
-				m := Message{}
-				err := json.Unmarshal([]byte(record), &m)
-				if err != nil {
-					log.Println("Unmarshal fail")
-					return
+					//正常的G完成后，消费缓冲区
+					<-concurrency
+				}()
+
+				for _, key := range keys {
+					chatRecords, err := global.RedisDB.ZRange(ctx, key, 0, -1).Result()
+					if err != nil {
+						zap.S().Info("从Redis获取聊天记录失败:", err)
+						return
+					}
+
+					zap.S().Info("----------持久化中------------")
+					//存储需要持久化的记录
+					msg := make([]Message, 0)
+
+					//持久化失败的记录归还
+					backMsg := make([]string, 0)
+
+					//开启事务
+					tx := global.DB.Begin()
+
+					for _, record := range chatRecords {
+						m := Message{}
+						err := json.Unmarshal([]byte(record), &m)
+						if err != nil {
+							zap.S().Info("Unmarshal fail", err.Error())
+
+							//回滚事务
+							tx.Rollback()
+							return
+						}
+						msg = append(msg, m)
+						backMsg = append(backMsg, record)
+					}
+
+					if err := tx.Table("messages").Save(msg).Error; err != nil {
+						zap.S().Info("持久化失败", err.Error())
+
+						//回滚事务
+						tx.Rollback()
+						return
+					}
+
+					for _, bg := range backMsg {
+						if err := global.RedisDB.ZRem(ctx, key, bg).Err(); err != nil {
+							fmt.Println("从Redis删除聊天记录失败:", err)
+
+							//回滚事务
+							tx.Rollback()
+							return
+						}
+					}
+					//提交事务
+					tx.Commit()
+
+					//持久化成功后移除对应key
+					removeKeyFromSaveKey(key)
+					zap.S().Info("----------持久化成功------------")
 				}
-				msg = append(msg, m)
-				backMsg = append(backMsg, record)
+			}(msgKeys)
+		}
+	}
+}
 
-				// 从Redis中删除记录
-				//if err = global.RedisDB.ZRem(ctx, key, record).Err(); err != nil {
-				//	fmt.Println("从Redis删除聊天记录失败:", err)
-				//	continue
-				//}
+// 向 saveKey 中添加 key 的函数，保护了 saveKey 的并发访问
+func addKeyToSaveKey(key string) {
+	saveKeyMutex.Lock()
+	defer saveKeyMutex.Unlock()
+	saveKey = append(saveKey, key)
+}
 
-			}
+// 获取当前的 saveKey 副本的函数，保护了 saveKey 的并发访问
+func getSaveKey() []string {
+	saveKeyMutex.Lock()
+	defer saveKeyMutex.Unlock()
+	return saveKey
+}
 
-			msg = append(msg, loseMsg...)
-			if err := global.DB.Table("messages").Save(msg).Error; err != nil {
-				log.Println("持久化失败")
-				loseMsg = append(loseMsg, msg...)
-				return
-			}
-			loseMsg = []Message{}
-
+// 从 saveKey 中删除 key 的函数，保护了 saveKey 的并发访问
+func removeKeyFromSaveKey(key string) {
+	saveKeyMutex.Lock()
+	defer saveKeyMutex.Unlock()
+	for i, k := range saveKey {
+		if k == key {
+			saveKey = append(saveKey[:i], saveKey[i+1:]...)
+			break
 		}
 	}
 }

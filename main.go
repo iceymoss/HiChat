@@ -4,6 +4,7 @@ import (
 	_ "HiChat/docs"
 	"HiChat/global"
 	"HiChat/initialize"
+	"HiChat/models"
 	"HiChat/router"
 	"fmt"
 	swaggerFiles "github.com/swaggo/files"
@@ -24,9 +25,11 @@ func main() {
 	initialize.InitDB()
 	initialize.InitRedis()
 
+	//持久化数据
+	go models.RecordPersistence()
+
 	router := router.Router()
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.Run(fmt.Sprintf(":%d", global.ServiceConfig.Port))
-
 }

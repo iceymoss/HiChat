@@ -1,11 +1,11 @@
 port: '8000'
 mysql:
-  host: '1.14.180.202'
-  port: '3306'
+  host: '81.68.251.185'
+  port: '3307'
   name: 'hi_chat'
   user: 'root'
-  password: 'password'
+  password: 'mysql123456'
 redis:
-  host: '1.14.180.202'
+  host: '81.68.251.185'
   port: '6379'
 

@@ -7,8 +7,8 @@ import (
 	"HiChat/models"
 	"HiChat/router"
 	"fmt"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	//swaggerFiles "github.com/swaggo/files"
+	//ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // @title 这是一个测试文档
@@ -29,7 +29,7 @@ func main() {
 	go models.RecordPersistence()
 
 	router := router.Router()
-	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	//router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	router.Run(fmt.Sprintf(":%d", global.ServiceConfig.Port))
 }

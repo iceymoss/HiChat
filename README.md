@@ -35,19 +35,20 @@
 
 系统架构如下：
 
-<img src="https://blogfiles-iceymoss.oss-cn-hangzhou.aliyuncs.com/blogs/%E6%88%AA%E5%B1%8F2022-12-28%20%E4%B8%8B%E5%8D%883.01.10.png" style="zoom:50%;" />
+
+<img src="https://hichat-1309975315.cos.ap-guangzhou.myqcloud.com/hichat-github%2FDrXEOv9xpl.png" style="zoom:50%;" />
 
 #### 通信流程
 
 通信流程如下：
 
-<img src="https://blogfiles-iceymoss.oss-cn-hangzhou.aliyuncs.com/blogs/%E6%88%AA%E5%B1%8F2022-12-28%20%E4%B8%8B%E5%8D%883.25.31.png" style="zoom:50%;" />
+<img src="https://hichat-1309975315.cos.ap-guangzhou.myqcloud.com/hichat-github%2FzDGWUKX9St.png" style="zoom:50%;" />
 
 ###  开发环境
 
 #### IDE: Goland
 
-#### 数据库工具：VScode
+#### 操作系统：MacOS
 
 环境搭建可参考这一篇文章：[web项目部署](https://learnku.com/articles/74054)
 

@@ -421,6 +421,11 @@ func RecordPersistence() {
 						backMsg = append(backMsg, record)
 					}
 
+					if len(msg) <= 0 {
+						tx.Rollback()
+						return
+					}
+
 					if err := tx.Table("messages").Save(msg).Error; err != nil {
 						zap.S().Info("持久化失败", err.Error())
 

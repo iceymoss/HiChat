@@ -5,11 +5,13 @@
 ## 目录
 
 - [前置条件](#前置条件)
+- [架构图](#架构图)
 - [项目结构](#项目结构)
 - [配置说明](#配置说明)
 - [构建步骤](#构建步骤)
 - [部署步骤](#部署步骤)
 - [验证部署](#验证部署)
+- [扩容和缩容](#扩容和缩容)
 - [故障排查](#故障排查)
 
 ## 前置条件
@@ -99,6 +101,96 @@ kubectl get nodes
 ```
 
 **注意**: k3d 创建集群后会自动配置 kubectl 的 kubeconfig，无需手动配置。
+
+## 架构图
+
+### 当前部署架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      k3d Kubernetes Cluster                    │
+│                      (Namespace: hichat)                        │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │                    LoadBalancer Service                    │ │
+│  │                    (hichat:8000)                           │ │
+│  │                    External IP: 172.21.0.2                │ │
+│  └───────────────────────┬────────────────────────────────────┘ │
+│                          │                                      │
+│                          ▼                                      │
+│  ┌──────────────────────────────────────────────────────────┐ │
+│  │              HiChat Application Deployment                 │ │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │ │
+│  │  │   Pod: hichat│  │   Pod: hichat│  │   Pod: hichat│   │ │
+│  │  │   (Port:8000)│  │   (Port:8000)│  │   (Port:8000)│   │ │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘   │ │
+│  │         │                  │                  │          │ │
+│  └─────────┼──────────────────┼──────────────────┼──────────┘ │
+│            │                  │                  │             │
+│            └──────────────────┼──────────────────┘             │
+│                               │                                 │
+│            ┌──────────────────┴──────────────────┐             │
+│            │                                      │             │
+│            ▼                                      ▼             │
+│  ┌──────────────────┐              ┌──────────────────┐        │
+│  │  MySQL Service   │              │  Redis Service    │        │
+│  │  (ClusterIP)     │              │  (ClusterIP)     │        │
+│  │  Port: 3306      │              │  Port: 6379      │        │
+│  └────────┬─────────┘              └────────┬─────────┘        │
+│           │                                  │                  │
+│           ▼                                  ▼                  │
+│  ┌──────────────────┐              ┌──────────────────┐        │
+│  │ MySQL Deployment │              │ Redis Deployment  │        │
+│  │  ┌────────────┐  │              │  ┌────────────┐  │        │
+│  │  │ Pod: mysql│  │              │  │ Pod: redis │  │        │
+│  │  │ Port:3306 │  │              │  │ Port:6379  │  │        │
+│  │  └────────────┘  │              │  └────────────┘  │        │
+│  │                  │              │                  │        │
+│  │  PVC: mysql-pvc  │              │                  │        │
+│  │  (Data Storage)   │              │                  │        │
+│  └──────────────────┘              └──────────────────┘        │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+外部访问:
+  http://localhost:8000 (通过 port-forward)
+  或
+  http://localhost:32496 (通过 k3d LoadBalancer 映射)
+```
+
+### 组件说明
+
+1. **LoadBalancer Service (hichat)**
+   - 类型: LoadBalancer
+   - 端口: 8000
+   - 作用: 对外暴露 HiChat 应用服务
+   - k3d 会自动将 LoadBalancer 映射到本地端口
+
+2. **HiChat Deployment**
+   - 当前副本数: 1 (可扩容)
+   - 容器端口: 8000
+   - 功能: 运行 HiChat 应用主程序
+
+3. **MySQL Service & Deployment**
+   - 类型: ClusterIP (集群内部访问)
+   - 端口: 3306
+   - 存储: 使用 PVC 持久化数据
+   - 初始化: 通过 ConfigMap 自动执行 SQL 脚本
+
+4. **Redis Service & Deployment**
+   - 类型: ClusterIP (集群内部访问)
+   - 端口: 6379
+   - 功能: 缓存和消息队列
+
+### 数据流向
+
+```
+用户请求 
+  → LoadBalancer Service (hichat)
+    → HiChat Pod(s) (负载均衡)
+      → MySQL Service → MySQL Pod (数据持久化)
+      → Redis Service → Redis Pod (缓存)
+```
 
 ## 项目结构
 
@@ -402,6 +494,112 @@ kubectl exec -it deployment/hichat -n hichat -- sh
 # 删除所有资源（清理环境）
 kubectl delete namespace hichat
 ```
+
+## 扩容和缩容
+
+### 扩容 HiChat 服务
+
+当需要增加 HiChat 服务的 Pod 实例数量以提高可用性和处理能力时，可以使用以下方法：
+
+#### 方法 1: 使用 kubectl scale 命令（推荐，快速）
+
+```bash
+# 扩容到 3 个 Pod 实例
+kubectl scale deployment hichat --replicas=3 -n hichat
+
+# 查看扩容进度
+kubectl get pods -n hichat -l app=hichat -w
+```
+
+#### 方法 2: 修改 YAML 文件
+
+编辑 `k8s/hichat.yaml` 文件，修改 `replicas` 字段：
+
+```yaml
+spec:
+  replicas: 3  # 从 1 改为 3
+```
+
+然后应用更改：
+
+```bash
+kubectl apply -f k8s/hichat.yaml
+```
+
+#### 方法 3: 使用 kubectl edit（临时修改）
+
+```bash
+kubectl edit deployment hichat -n hichat
+```
+
+在编辑器中找到 `replicas` 字段并修改，保存后自动生效。
+
+### 验证扩容
+
+```bash
+# 查看 Pod 数量
+kubectl get pods -n hichat -l app=hichat
+
+# 查看 Deployment 状态
+kubectl get deployment hichat -n hichat
+
+# 查看详细信息
+kubectl describe deployment hichat -n hichat
+```
+
+预期输出示例：
+```
+NAME                     READY   STATUS    RESTARTS   AGE
+hichat-9f7f97d6d-xxx1   1/1     Running   0          2m
+hichat-9f7f97d6d-xxx2   1/1     Running   0          2m
+hichat-9f7f97d6d-xxx3   1/1     Running   0          2m
+```
+
+### 负载均衡
+
+扩容后，LoadBalancer Service 会自动在所有 Pod 之间进行负载均衡。请求会被分发到不同的 Pod 实例。
+
+验证负载均衡：
+
+```bash
+# 查看 Service 的 Endpoints（可以看到所有 Pod 的 IP）
+kubectl get endpoints hichat -n hichat
+
+# 查看 Service 详细信息
+kubectl describe svc hichat -n hichat
+```
+
+### 缩容（减少 Pod 数量）
+
+```bash
+# 缩容到 1 个 Pod
+kubectl scale deployment hichat --replicas=1 -n hichat
+
+# 或者缩容到 0（停止所有实例）
+kubectl scale deployment hichat --replicas=0 -n hichat
+```
+
+### 自动扩容（HPA - Horizontal Pod Autoscaler）
+
+如果需要根据 CPU 或内存使用率自动扩容，可以配置 HPA：
+
+```bash
+# 创建 HPA（需要 metrics-server）
+kubectl autoscale deployment hichat --cpu-percent=70 --min=1 --max=5 -n hichat
+
+# 查看 HPA 状态
+kubectl get hpa -n hichat
+```
+
+**注意**: k3d 默认不包含 metrics-server，需要手动安装才能使用 HPA。
+
+### 扩容注意事项
+
+1. **资源限制**: k3d 集群资源有限，不建议扩容过多 Pod
+2. **数据库连接**: 确保数据库连接池配置足够支持多个应用实例
+3. **会话状态**: 如果应用有会话状态，考虑使用 Redis 存储会话
+4. **文件上传**: 如果有文件上传功能，确保使用共享存储（如 NFS）或对象存储
+5. **WebSocket**: WebSocket 连接是持久连接，扩容后新连接会分配到新 Pod
 
 ## 更新部署
 

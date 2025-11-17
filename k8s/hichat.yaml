@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hichat
+  namespace: hichat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hichat
+  template:
+    metadata:
+      labels:
+        app: hichat
+    spec:
+      containers:
+      - name: hichat
+        image: hichat:latest  # 你需要先构建并推送到k3d的镜像仓库
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MYSQL_HOST
+          value: "mysql"
+        - name: MYSQL_PORT
+          value: "3306"
+        - name: MYSQL_USER
+          value: "iceymoss"
+        - name: MYSQL_PASSWORD
+          value: "Yk?123456"
+        - name: MYSQL_DATABASE
+          value: "hi_chat"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: PORT
+          value: "8000"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hichat
+  namespace: hichat
+spec:
+  selector:
+    app: hichat
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP  # 使用 ClusterIP，通过 Ingress 暴露服务; LoadBalancer  # k3d会自动创建LoadBalancer

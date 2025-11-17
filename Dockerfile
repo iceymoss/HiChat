@@ -1,17 +1,34 @@
-FROM golang:alpine3.17 AS builder
-COPY /HiChat /HiChat
+FROM golang:1.17-alpine AS builder
 
-ENV GO111MODULE=on
-ENV GOPROXY=https://mirrors.aliyun.com/goproxy/,direct
+WORKDIR /app
 
-WORKDIR /HiChat
-RUN go mod download && \
-    go build main.go
+# 复制 go mod 文件
+COPY go.mod go.sum ./
+RUN go mod download
 
-FROM ubuntu:20.04
-COPY --from=builder /HiChat /HiChat
+# 复制源代码
+COPY . .
+
+# 构建应用
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+
+# 运行阶段
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates tzdata
+WORKDIR /root/
+
+# 从构建阶段复制二进制文件
+COPY --from=builder /app/main .
+# 复制配置文件
+COPY --from=builder /app/config-debug.yaml .
+# 复制 index.html（根目录的首页文件）
+COPY --from=builder /app/index.html .
+# 复制 views 目录（HTML 模板）
+COPY --from=builder /app/views ./views
+# 复制 asset 目录（静态资源）
+COPY --from=builder /app/asset ./asset
 
 EXPOSE 8000
 
-# ENTRYPOINT ["ls", "/HiChat"]
-CMD ["/HiChat/main"]
+CMD ["./main"]

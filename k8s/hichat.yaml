@@ -48,4 +48,4 @@ spec:
   ports:
   - port: 8000
     targetPort: 8000
-  type: LoadBalancer  # k3d会自动创建LoadBalancer
+  type: ClusterIP  # 使用 ClusterIP，通过 Ingress 暴露服务; LoadBalancer  # k3d会自动创建LoadBalancer

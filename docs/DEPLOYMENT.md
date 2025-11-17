@@ -11,6 +11,7 @@
 - [构建步骤](#构建步骤)
 - [部署步骤](#部署步骤)
 - [验证部署](#验证部署)
+- [服务暴露方式](#服务暴露方式)
 - [理解 kubectl get all 输出](#理解-kubectl-get-all-输出)
 - [扩容和缩容](#扩容和缩容)
 - [故障排查](#故障排查)
@@ -202,7 +203,8 @@ HiChat/
 │   ├── namespace.yaml      # 命名空间定义
 │   ├── mysql.yaml          # MySQL 部署配置（包含数据库初始化）
 │   ├── redis.yaml          # Redis 部署配置
-│   └── hichat.yaml         # HiChat 应用部署配置
+│   ├── hichat.yaml         # HiChat 应用部署配置
+│   └── ingress.yaml        # Ingress 配置（域名路由）
 ├── config-debug.yaml       # 应用配置文件
 ├── hi_chat.sql             # 数据库初始化 SQL（已集成到 mysql.yaml）
 └── ...                     # 其他项目文件
@@ -234,7 +236,8 @@ HiChat/
   - 创建 PersistentVolumeClaim 用于数据持久化
   - 包含 ConfigMap，自动执行数据库初始化 SQL
 - **redis.yaml**: 创建 Redis Deployment 和 Service
-- **hichat.yaml**: 创建 HiChat 应用 Deployment 和 LoadBalancer Service
+- **hichat.yaml**: 创建 HiChat 应用 Deployment 和 ClusterIP Service
+- **ingress.yaml**: 创建 Ingress 资源，通过域名路由访问服务（使用 Traefik）
 
 ## 构建步骤
 
@@ -323,7 +326,29 @@ kubectl apply -f k8s/hichat.yaml
 kubectl wait --for=condition=ready pod -l app=hichat -n hichat --timeout=60s
 ```
 
-### 步骤 6: 检查所有资源状态
+### 步骤 6: 部署 Ingress（可选，推荐）
+
+如果需要使用域名访问（推荐方式）：
+
+```bash
+kubectl apply -f k8s/ingress.yaml
+```
+
+验证 Ingress 部署：
+
+```bash
+kubectl get ingress -n hichat
+```
+
+配置本地 hosts 文件（WSL 环境）：
+
+```bash
+echo "127.0.0.1 hichat.local" | sudo tee -a /etc/hosts
+```
+
+详细配置步骤请参考 [Ingress 配置](#方式-3-ingress推荐用于生产环境) 章节。
+
+### 步骤 7: 检查所有资源状态
 
 ```bash
 kubectl get all -n hichat
@@ -354,7 +379,18 @@ kubectl get svc hichat -n hichat
 
 ### 3. 访问应用
 
-**方式 1: 使用 port-forward（推荐）**
+**方式 1: 使用 Ingress（推荐，已配置）**
+
+如果已部署 Ingress，可以通过域名访问：
+
+```bash
+# 通过域名访问（需要配置 hosts 文件）
+curl http://hichat.local:8000
+```
+
+在浏览器访问：`http://hichat.local:8000`
+
+**方式 2: 使用 port-forward（临时调试）**
 
 ```bash
 kubectl port-forward svc/hichat 8000:8000 -n hichat
@@ -362,7 +398,7 @@ kubectl port-forward svc/hichat 8000:8000 -n hichat
 
 然后在浏览器访问：`http://localhost:8000`
 
-**方式 2: 使用 k3d LoadBalancer**
+**方式 3: 使用 k3d LoadBalancer（如果 Service 类型为 LoadBalancer）**
 
 k3d 会自动将 LoadBalancer 服务映射到本地端口。查看服务信息获取映射的端口：
 
@@ -380,6 +416,425 @@ curl http://localhost:8000
 
 # 测试注册页面
 curl http://localhost:8000/register
+```
+
+## 服务暴露方式
+
+Kubernetes 提供了多种方式将集群内的服务暴露给外部访问。以下是常用的几种方式：
+
+### 当前使用的方式：LoadBalancer
+
+**配置位置**: `k8s/hichat.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hichat
+  namespace: hichat
+spec:
+  type: LoadBalancer  # LoadBalancer 类型
+  selector:
+    app: hichat
+  ports:
+  - port: 8000
+    targetPort: 8000
+```
+
+**工作原理**:
+- k3d 会自动将 LoadBalancer 服务映射到本地端口
+- 查看映射端口：`kubectl get svc hichat -n hichat`
+- 输出示例：`8000:32496/TCP` 表示可以通过 `localhost:32496` 访问
+
+**访问方式**:
+```bash
+# 查看映射的端口
+kubectl get svc hichat -n hichat
+
+# 访问（假设映射到 32496 端口）
+curl http://localhost:32496
+```
+
+**优点**:
+- 简单直接，k3d 自动处理
+- 适合本地开发和测试
+
+**缺点**:
+- 端口是动态分配的，可能每次不同
+- 仅适合本地环境
+
+### 方式 2: NodePort
+
+NodePort 会在每个节点上开放一个固定端口（30000-32767），可以从集群外部访问。
+
+**配置示例** (`k8s/hichat-nodeport.yaml`):
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hichat-nodeport
+  namespace: hichat
+spec:
+  type: NodePort
+  selector:
+    app: hichat
+  ports:
+  - port: 8000
+    targetPort: 8000
+    nodePort: 30080  # 可选：指定端口（30000-32767）
+```
+
+**部署**:
+```bash
+kubectl apply -f k8s/hichat-nodeport.yaml
+```
+
+**访问方式**:
+```bash
+# 查看 NodePort
+kubectl get svc hichat-nodeport -n hichat
+
+# 访问（假设 NodePort 是 30080）
+curl http://localhost:30080
+```
+
+**优点**:
+- 端口固定，便于配置
+- 可以从集群外部直接访问
+
+**缺点**:
+- 端口范围受限（30000-32767）
+- 需要知道节点 IP
+
+### 方式 3: Ingress（推荐用于生产环境）
+
+Ingress 提供基于 HTTP/HTTPS 的路由，支持域名、路径、SSL 等高级功能。
+
+**前置条件**: k3d 默认使用 Traefik 作为 Ingress Controller
+
+#### 完整配置步骤（WSL 环境）
+
+**步骤 1: 检查 Traefik Ingress Controller**
+
+```bash
+# 检查 Traefik 是否运行
+kubectl get pods -n kube-system | grep traefik
+```
+
+**预期输出**：应该看到 `traefik-xxx` Pod 状态为 `Running`
+
+如果 Traefik 没有运行，需要重新创建 k3d 集群（见故障排查部分）。
+
+**步骤 2: 更新 Service 类型为 ClusterIP**
+
+编辑 `k8s/hichat.yaml`，将 Service 类型改为 `ClusterIP`：
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: hichat
+  namespace: hichat
+spec:
+  type: ClusterIP  # 改为 ClusterIP，通过 Ingress 暴露
+  selector:
+    app: hichat
+  ports:
+  - port: 8000
+    targetPort: 8000
+```
+
+应用更新：
+
+```bash
+kubectl apply -f k8s/hichat.yaml
+```
+
+验证 Service 类型：
+
+```bash
+kubectl get svc hichat -n hichat
+```
+
+应该看到 `TYPE` 为 `ClusterIP`。
+
+**步骤 3: 部署 Ingress**
+
+Ingress 配置文件已创建在 `k8s/ingress.yaml`：
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hichat-ingress
+  namespace: hichat
+  annotations:
+    # Traefik 特定注解（k3d 默认使用 Traefik）
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik  # k3d 默认使用 traefik
+  rules:
+  - host: hichat.local  # 本地域名，需要在 hosts 文件中配置
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hichat
+            port:
+              number: 8000
+```
+
+部署 Ingress：
+
+```bash
+kubectl apply -f k8s/ingress.yaml
+```
+
+**步骤 4: 验证 Ingress 部署**
+
+```bash
+# 查看 Ingress 状态
+kubectl get ingress -n hichat
+
+# 查看详细信息
+kubectl describe ingress hichat-ingress -n hichat
+```
+
+**预期输出**：
+```
+NAME             CLASS     HOSTS          ADDRESS      PORTS   AGE
+hichat-ingress   traefik   hichat.local   172.21.0.2   80      10s
+```
+
+**步骤 5: 配置 WSL hosts 文件**
+
+```bash
+# 添加本地域名映射
+echo "127.0.0.1 hichat.local" | sudo tee -a /etc/hosts
+```
+
+验证配置：
+
+```bash
+cat /etc/hosts | grep hichat.local
+```
+
+**步骤 6: 访问应用**
+
+**注意**: k3d 的 Traefik 可能映射到 8000 端口而不是标准的 80 端口。
+
+```bash
+# 方式 1: 尝试 8000 端口（常见情况）
+curl http://hichat.local:8000
+
+# 方式 2: 如果 Traefik 映射到 80 端口
+curl http://hichat.local
+
+# 方式 3: 在浏览器中访问
+# http://hichat.local:8000
+```
+
+**验证访问成功**：应该返回 HTML 内容（登录页面）。
+
+#### 完整命令序列
+
+```bash
+# 1. 检查 Traefik
+kubectl get pods -n kube-system | grep traefik
+
+# 2. 更新 Service
+kubectl apply -f k8s/hichat.yaml
+
+# 3. 部署 Ingress
+kubectl apply -f k8s/ingress.yaml
+
+# 4. 验证 Ingress
+kubectl get ingress -n hichat
+
+# 5. 配置 hosts（需要输入密码）
+echo "127.0.0.1 hichat.local" | sudo tee -a /etc/hosts
+
+# 6. 测试访问
+curl http://hichat.local:8000
+```
+
+#### Windows 浏览器访问（可选）
+
+如果需要在 Windows 浏览器中访问，也需要配置 Windows hosts 文件：
+
+1. 以**管理员身份**打开记事本
+2. 打开文件：`C:\Windows\System32\drivers\etc\hosts`
+3. 添加：`127.0.0.1 hichat.local`
+4. 保存
+5. 在浏览器访问：`http://hichat.local:8000`
+
+#### 优点
+
+- 支持域名和路径路由
+- 支持 SSL/TLS（可配置）
+- 适合生产环境
+- 可以一个入口管理多个服务
+- 使用域名访问，更专业
+
+#### 缺点
+
+- 需要安装 Ingress Controller（k3d 默认已安装 Traefik）
+- 需要配置 hosts 文件
+- 配置相对复杂
+
+#### 故障排查
+
+**问题 1: Ingress 没有 ADDRESS**
+
+**原因**: Traefik 可能没有正确运行
+
+**解决**:
+```bash
+# 检查 Traefik Pod
+kubectl get pods -n kube-system | grep traefik
+
+# 查看 Traefik 日志
+kubectl logs -n kube-system -l app.kubernetes.io/name=traefik
+```
+
+**问题 2: 无法访问 hichat.local**
+
+**检查**:
+```bash
+# 1. 检查 hosts 文件
+cat /etc/hosts | grep hichat.local
+
+# 2. 检查 Ingress
+kubectl get ingress -n hichat
+
+# 3. 检查 Service
+kubectl get svc hichat -n hichat
+
+# 4. 尝试不同端口
+curl http://hichat.local:8000
+curl http://hichat.local:80
+```
+
+**问题 3: 404 错误**
+
+**原因**: Ingress 路由配置可能有问题
+
+**解决**:
+```bash
+# 查看 Ingress 详细信息
+kubectl describe ingress hichat-ingress -n hichat
+
+# 检查 Service 名称是否匹配
+kubectl get svc -n hichat
+```
+
+### 方式 4: port-forward（临时访问）
+
+port-forward 是 kubectl 提供的临时端口转发功能，适合调试和临时访问。
+
+**使用方式**:
+```bash
+# 转发 Service
+kubectl port-forward svc/hichat 8000:8000 -n hichat
+
+# 或直接转发 Pod
+kubectl port-forward pod/<pod-name> 8000:8000 -n hichat
+```
+
+**访问**: `http://localhost:8000`
+
+**优点**:
+- 无需修改配置
+- 适合临时访问和调试
+
+**缺点**:
+- 连接断开后需要重新执行
+- 不适合生产环境
+
+### 方式对比
+
+| 方式 | 适用场景 | 端口 | 配置复杂度 | 生产环境 |
+|------|---------|------|-----------|---------|
+| LoadBalancer | 本地开发 | 动态 | 简单 | ❌ |
+| NodePort | 简单暴露 | 30000-32767 | 简单 | ⚠️ |
+| Ingress | 生产环境 | 80/443 | 中等 | ✅ |
+| port-forward | 临时调试 | 任意 | 简单 | ❌ |
+
+### 从外部网络访问（生产环境）
+
+如果要从外部网络访问（非本地），需要：
+
+1. **使用 Ingress + 域名**:
+   - 配置真实的域名（如 `hichat.example.com`）
+   - 配置 DNS 指向集群的 Ingress Controller IP
+   - 配置 SSL 证书
+
+2. **使用 NodePort + 公网 IP**:
+   - 确保节点有公网 IP
+   - 配置防火墙规则开放 NodePort 端口
+   - 通过 `http://<公网IP>:<NodePort>` 访问
+
+3. **使用云服务商的 LoadBalancer**:
+   - 在云环境（如 AWS、Azure、GCP）中
+   - LoadBalancer 会自动分配公网 IP
+   - 通过公网 IP 访问
+
+### 当前架构的服务暴露
+
+#### 使用 Ingress 方式（推荐）
+
+```
+外部访问 (http://hichat.local:8000)
+    ↓
+Traefik Ingress Controller
+    ↓
+Ingress (hichat-ingress)
+    ↓
+ClusterIP Service (hichat)
+    ↓
+HiChat Pods (负载均衡)
+```
+
+**查看 Ingress 状态**:
+```bash
+kubectl get ingress -n hichat
+```
+
+**访问示例**:
+```bash
+# 通过域名访问（需要配置 hosts 文件）
+curl http://hichat.local:8000
+
+# 在浏览器中访问
+# http://hichat.local:8000
+```
+
+#### 使用 LoadBalancer 方式（备选）
+
+如果使用 LoadBalancer 方式：
+
+```
+外部访问
+    ↓
+LoadBalancer Service (hichat)
+    ↓ (自动映射到本地端口，如 32496)
+k3d 网络层
+    ↓
+HiChat Pods (负载均衡)
+```
+
+**查看当前暴露的端口**:
+```bash
+kubectl get svc hichat -n hichat
+```
+
+**访问示例**:
+```bash
+# 假设映射到 32496 端口
+curl http://localhost:32496
 ```
 
 ## 故障排查

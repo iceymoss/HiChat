@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: hichat
+  namespace: argocd
+  # 添加 finalizers 以支持级联删除
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  # 源仓库配置
+  source:
+    repoURL: http://172.21.0.1/root/hichat.git
+    targetRevision: master  # 监控 master 分支
+    path: k8s  # k8s 配置文件所在目录
+  
+  # 目标集群和命名空间
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hichat
+  
+  # 同步策略
+  syncPolicy:
+    # 自动同步（当 Git 仓库有变化时自动同步）
+    automated:
+      prune: true      # 自动删除 Git 中不存在的资源
+      selfHeal: true   # 自动修复集群中的配置漂移
+    # 同步选项
+    syncOptions:
+      - CreateNamespace=true  # 如果命名空间不存在则创建
+    # 保留历史记录（用于回滚）
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+

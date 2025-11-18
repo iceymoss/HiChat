@@ -114,7 +114,12 @@ update-config:
     - echo "当前分支:"
     - git branch
     
-    # 步骤 2: 测试简单的 Git 操作
+    # 步骤 2: 同步 master 分支的 k8s 目录
+    - echo "步骤 2 => 同步 master 分支的 k8s 目录"
+    - git checkout master -- k8s/ 2>/dev/null || echo "k8s 目录已存在"
+    - echo "k8s 目录同步完成"
+    
+    # 步骤 3: 测试简单的 Git 操作
     - git status
     - git branch -a
     - echo "配置更新完成"

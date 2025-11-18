@@ -348,6 +348,7 @@ nohup gitlab-runner run > ~/gitlab-runner.log 2>&1 &
 tail -f ~/gitlab-runner.log
 ```
 
+我们可以复制一份到：/etc/gitlab-runner/config.toml，然后可以使用系统启动
 **系统服务模式**（推荐用于生产）:
 ```bash
 # 如果使用系统服务模式注册

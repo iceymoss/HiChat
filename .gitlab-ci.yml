@@ -1,5 +1,6 @@
 stages:
   - build
+  - update-config  # 新增：更新 Kubernetes 配置阶段
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -48,3 +49,33 @@ build:
     - merge_requests
   tags:
     - docker
+# 更新 Kubernetes 配置中的镜像标签（推送到配置分支）
+update-config:
+  stage: update-config
+  image: alpine/git:latest
+  before_script:
+    - git config --global user.email "ci@gitlab.iceymoss"
+    - git config --global user.name "GitLab CI"
+  script:
+    - echo "更新 Kubernetes 配置文件中的镜像标签..."
+    # 检出或创建配置分支
+    - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
+    - git checkout k8s-config
+    # 同步 master 分支的 k8s 目录（确保配置分支包含最新的 k8s 文件）
+    - git checkout master -- k8s/ 2>/dev/null || echo "k8s 目录已存在"
+    # 更新镜像标签
+    - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
+    - echo "更新后的镜像配置:"
+    - grep "image:" k8s/hichat.yaml
+    # 提交更改到配置分支
+    - git add k8s/hichat.yaml
+    - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || exit 0
+    # 推送到配置分支（不是 master）
+    - git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config || exit 0
+    - echo "配置更新完成，已推送到 k8s-config 分支，ArgoCD 将自动同步部署"
+  only:
+    - master  # 只在 master 分支的代码推送时触发
+  when: on_success  # 只在 build 阶段成功后才执行
+  tags:
+    - docker
+

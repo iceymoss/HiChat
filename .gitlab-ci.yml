@@ -111,7 +111,8 @@ update-config:
     - echo "步骤 1: 检出或创建 k8s-config 分支"
     - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
     - git checkout k8s-config
-    - echo "当前分支: $(git branch --show-current)"
+    - echo "当前分支:"
+    - git branch
     
     # 步骤 2: 测试简单的 Git 操作
     - git status

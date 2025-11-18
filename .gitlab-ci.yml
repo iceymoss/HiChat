@@ -106,7 +106,14 @@ update-config:
   
   script:
     - echo "开始更新配置..."
-    # 测试简单的 Git 操作
+    
+    # 步骤 1: 检出或创建配置分支
+    - echo "步骤 1: 检出或创建 k8s-config 分支"
+    - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
+    - git checkout k8s-config
+    - echo "当前分支: $(git branch --show-current)"
+    
+    # 步骤 2: 测试简单的 Git 操作
     - git status
     - git branch -a
     - echo "配置更新完成"

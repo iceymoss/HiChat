@@ -1,6 +1,5 @@
 stages:
   - build
-  - update-config  # 新增：更新 Kubernetes 配置阶段
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -47,27 +46,5 @@ build:
     - master
     - develop
     - merge_requests
-  tags:
-    - docker
-
-# 更新 Kubernetes 配置中的镜像标签
-update-config:
-  stage: update-config
-  image: alpine/git:latest
-  before_script:
-    - git config --global user.email "ci@gitlab.iceymoss"
-    - git config --global user.name "GitLab CI"
-  script:
-    - echo "更新 Kubernetes 配置文件中的镜像标签..."
-    - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
-    - echo "更新后的镜像配置:"
-    - grep "image:" k8s/hichat.yaml
-    - git add k8s/hichat.yaml
-    - "git commit -m \"chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]\" || exit 0"
-    - "git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:master || exit 0"
-    - echo "配置更新完成，ArgoCD 将自动同步部署"
-  only:
-    - master  # 只在 master 分支执行
-  when: on_success  # 只在 build 阶段成功后才执行
   tags:
     - docker

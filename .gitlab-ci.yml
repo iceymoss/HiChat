@@ -1,45 +1,117 @@
-stages:
-  - build
-  - update-config
+# ============================================================================
+# GitOps CI/CD Pipeline 配置
+# ============================================================================
+# 完整工作流程：
+# 1. 开发者推送代码到 master 分支
+# 2. GitLab 触发 Pipeline（检测到 .gitlab-ci.yml）
+# 3. Stage 1 (build): 构建 Docker 镜像并推送到 Registry
+# 4. Stage 2 (update-config): 更新 k8s-config 分支的配置文件
+# 5. ArgoCD 检测到 k8s-config 分支变化（轮询或 Webhook）
+# 6. ArgoCD 自动同步到 Kubernetes 集群
+# 7. Kubernetes 执行滚动更新，新版本运行
+# ============================================================================
 
+stages:
+  - build          # 阶段 1: 构建并推送 Docker 镜像到 Registry
+  - update-config  # 阶段 2: 更新配置分支 + 触发 ArgoCD 自动部署
+
+# ============================================================================
+# 全局变量配置
+# ============================================================================
 variables:
+  # Docker 配置
   DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
+  DOCKER_TLS_CERTDIR: ""  # 禁用 TLS（本地 Registry 使用 HTTP）
+  
+  # GitLab Container Registry 配置
+  # 本地 GitLab Registry 地址（包含端口）
   CI_REGISTRY: "gitlab.iceymoss:5050"
   CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
+  
+  # 镜像标签策略：使用分支名和 commit SHA
+  # - IMAGE_TAG: 分支名标签（如 master, develop）
+  # - IMAGE_TAG_LATEST: latest 标签（最新版本）
+  # - IMAGE_TAG_COMMIT: commit SHA 标签（精确版本，用于部署）
   IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
   IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
+# ============================================================================
+# Stage 1: 构建并推送 Docker 镜像
+# ============================================================================
+# 作用：将源代码构建成 Docker 镜像并推送到 GitLab Container Registry
+# 流程位置：开发者推送代码 → GitLab 触发 Pipeline → build 阶段执行
+# 输出：Registry 中的三个镜像标签（分支名、latest、commit SHA）
+# 下一步：build 成功后触发 update-config 阶段
+# ============================================================================
 build:
   stage: build
-  image: docker:24
+  image: docker:24  # 使用 Docker 官方镜像作为执行环境
+  
+  # Docker-in-Docker 服务：在容器内运行 Docker daemon
   services:
     - name: docker:24-dind
-      command: ["--insecure-registry=gitlab.iceymoss:5050"]
+      command: ["--insecure-registry=gitlab.iceymoss:5050"]  # 配置本地 Registry 为不安全模式
+  
   before_script:
+    # 登录 GitLab Container Registry
+    # 使用 GitLab CI Token 进行认证，无需额外配置
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  
   script:
+    # 步骤 1: 构建 Docker 镜像（使用 Dockerfile 多阶段构建）
     - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
+    
+    # 步骤 2: 推送镜像到 Registry（三个标签）
+    # - 分支名标签：用于标识分支（如 master, develop）
+    # - latest 标签：最新版本（向后兼容）
+    # - commit SHA 标签：精确版本（用于部署，可追溯）
     - docker push $IMAGE_TAG
     - docker push $IMAGE_TAG_LATEST
     - docker push $IMAGE_TAG_COMMIT
+  
+  # 触发条件：只在指定分支或合并请求时执行
   only:
     - main
-    - master
-    - develop
-    - merge_requests
+    - master      # 主分支：生产环境部署
+    - develop     # 开发分支：开发环境部署
+    - merge_requests  # 合并请求：代码审查时构建
+  
+  # 使用带有 docker 标签的 Runner（支持 Docker-in-Docker）
   tags:
     - docker
 
+# ============================================================================
+# Stage 2: 更新 Kubernetes 配置（配置分支方案）
+# ============================================================================
+# 作用：更新 k8s-config 分支的配置文件，触发 ArgoCD 自动部署
+# 流程位置：build 成功 → update-config 执行 → 推送到 k8s-config 分支 → ArgoCD 检测变化
+# 关键点：
+#   - 配置更新在 k8s-config 分支，不在 master 分支（保持 master 分支 Git 历史干净）
+#   - 使用 commit SHA 作为镜像标签（精确版本，可追溯）
+#   - 使用 [skip ci] 避免循环触发 Pipeline
+# 下一步：ArgoCD 检测到 k8s-config 分支变化后自动同步到 Kubernetes 集群
+# ============================================================================
 update-config:
   stage: update-config
-  image: alpine/git:latest
+  image: alpine/git:latest  # 轻量级镜像，包含 git 命令
+  
   script:
+    # 步骤 1: 输出开始信息
     - echo "开始更新配置..."
+    
+    # 步骤 2: 输出完成信息
     - echo "配置更新完成"
+  
+  # 触发条件：只在 master 分支的代码推送时执行
+  # 原因：只有主分支的代码才需要部署到生产环境
   only:
     - master
+  
+  # 执行时机：只在 build 阶段成功后才执行
+  # 原因：确保镜像已成功构建并推送到 Registry
   when: on_success
+  
+  # 使用带有 docker 标签的 Runner
   tags:
     - docker

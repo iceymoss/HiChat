@@ -1,6 +1,5 @@
 stages:
   - build
-  - update-config
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -18,48 +17,16 @@ build:
     - name: docker:24-dind
       command: ["--insecure-registry=gitlab.iceymoss:5050"]
   before_script:
-    - echo "登录 GitLab Container Registry: $CI_REGISTRY"
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
   script:
-    - echo "构建 Docker 镜像..."
     - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
-    - echo "推送镜像到 GitLab Container Registry..."
     - docker push $IMAGE_TAG
     - docker push $IMAGE_TAG_LATEST
     - docker push $IMAGE_TAG_COMMIT
-    - echo "镜像构建完成:"
-    - echo "  - $IMAGE_TAG"
-    - echo "  - $IMAGE_TAG_LATEST"
-    - echo "  - $IMAGE_TAG_COMMIT"
   only:
     - main
     - master
     - develop
     - merge_requests
-  tags:
-    - docker
-
-update-config:
-  stage: update-config
-  image: alpine/git:latest
-  before_script:
-    - git config --global user.email "ci@gitlab.iceymoss"
-    - git config --global user.name "GitLab CI"
-  script:
-    - echo "更新 Kubernetes 配置文件中的镜像标签..."
-    - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
-    - git checkout k8s-config
-    - git checkout master -- k8s/ 2>/dev/null || echo "k8s 目录已存在"
-    - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
-    - echo "更新后的镜像配置:"
-    - grep "image:" k8s/hichat.yaml
-    - git add k8s/hichat.yaml
-    - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || exit 0
-    - git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config || exit 0
-    - echo "配置更新完成，已推送到 k8s-config 分支"
-    - echo "ArgoCD 将自动检测分支变化并同步部署到集群"
-  only:
-    - master
-  when: on_success
   tags:
     - docker

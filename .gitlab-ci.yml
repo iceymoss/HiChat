@@ -172,29 +172,29 @@ update-config:
     # 步骤 7: （可选）触发 ArgoCD 同步并等待结果
     # - 若希望在 CI 中直接看到部署结果，请在 GitLab CI/CD Variables 中配置：
     #   ARGOCD_SERVER, ARGOCD_USERNAME, ARGOCD_PASSWORD（或 ARGOCD_AUTH_TOKEN）
-    # - 如果这些变量未配置，将提示并使 job 失败，提醒开发者补充配置
+    # - 如果这些变量未配置，将跳过 ArgoCD 同步步骤
     - |
       if [ -z "$ARGOCD_SERVER" ] || { [ -z "$ARGOCD_USERNAME" ] && [ -z "$ARGOCD_AUTH_TOKEN" ]; }; then
-        echo "ERROR: ArgoCD 登录信息未配置 (ARGOCD_SERVER / ARGOCD_USERNAME 或 ARGOCD_AUTH_TOKEN)。";
-        echo "请在 GitLab CI/CD Variables 中设置后再试。";
-        exit 1;
-      fi
-    - echo "触发 ArgoCD 同步，并等待 $ARGOCD_SYNC_TIMEOUT 秒内完成..."
-    # 安装 argocd CLI（若镜像内未预装）
-    - apk add --no-cache curl ca-certificates >/dev/null
-    - curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-    - chmod +x /usr/local/bin/argocd
-    # 登录 ArgoCD（优先使用 Token，其次用户名/密码）
-    - |
-      if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
-        argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web --insecure
+        echo "INFO: ArgoCD 登录信息未配置，跳过 ArgoCD 同步步骤。";
+        echo "如需自动触发 ArgoCD 同步，请在 GitLab CI/CD Variables 中设置：";
+        echo "  ARGOCD_SERVER, ARGOCD_USERNAME, ARGOCD_PASSWORD（或 ARGOCD_AUTH_TOKEN）";
       else
-        argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --grpc-web --insecure
+        echo "触发 ArgoCD 同步，并等待 $ARGOCD_SYNC_TIMEOUT 秒内完成..."
+        # 安装 argocd CLI
+        apk add --no-cache curl ca-certificates >/dev/null
+        curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+        chmod +x /usr/local/bin/argocd
+        # 登录 ArgoCD
+        if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+          argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web --insecure
+        else
+          argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --grpc-web --insecure
+        fi
+        # 触发同步并等待结果
+        argocd app sync "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --prune
+        argocd app wait "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --health --sync
+        echo "ArgoCD 同步成功，部署完成 ✅"
       fi
-    # 触发同步并等待结果
-    - argocd app sync "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --prune
-    - argocd app wait "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --health --sync
-    - echo "ArgoCD 同步成功，部署完成 ✅"
   
   # 触发条件：只在 master 分支的代码推送时执行
   # 原因：只有主分支的代码才需要部署到生产环境

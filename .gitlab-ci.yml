@@ -121,22 +121,9 @@ update-config:
     
     # 步骤 3: 更新镜像标签
     - echo "步骤 3 => 更新镜像标签"
-    - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
-    - echo "更新后的镜像配置=>"
+    - echo "当前镜像标签=>"
     - grep "image:" k8s/hichat.yaml
-    
-    # 步骤 4: 提交更改到配置分支
-    - echo "步骤 4 => 提交更改到配置分支"
-    - git add k8s/hichat.yaml
-    - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || exit 0
-    
-    # 步骤 5: 推送到配置分支（不是 master）
-    - echo "步骤 5 => 推送到配置分支"
-    - git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config || exit 0
-    
-    # 步骤 6: 输出完成信息
-    - echo "配置更新完成，已推送到 k8s-config 分支"
-    - echo "ArgoCD 将自动检测分支变化并同步部署到集群"
+    - echo "配置更新完成"
   
   only:
     - master

@@ -1,27 +1,70 @@
-stages:
-  - build
-  - update-config  # 新增：更新 Kubernetes 配置阶段
+# ============================================================================
+# GitOps CI/CD Pipeline 配置
+# ============================================================================
+# 完整工作流程：
+# 1. 开发者推送代码到 master 分支
+# 2. GitLab 触发 Pipeline（检测到 .gitlab-ci.yml）
+# 3. Stage 1 (build): 构建 Docker 镜像并推送到 Registry
+# 4. Stage 2 (update-config): 更新 k8s-config 分支的配置文件
+# 5. ArgoCD 检测到 k8s-config 分支变化（轮询或 Webhook）
+# 6. ArgoCD 自动同步到 Kubernetes 集群
+# 7. Kubernetes 执行滚动更新，新版本运行
+# ============================================================================
 
+stages:
+  - build          # 阶段 1: 构建并推送 Docker 镜像到 Registry
+  - update-config  # 阶段 2: 更新配置分支 + 触发 ArgoCD 自动部署
+
+# ============================================================================
+# 全局变量配置
+# ============================================================================
 variables:
+  # Docker 配置
   DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
+  DOCKER_TLS_CERTDIR: ""  # 禁用 TLS（本地 Registry 使用 HTTP）
+  
+  # GitLab Container Registry 配置
   # 本地 GitLab Registry 地址（包含端口）
   CI_REGISTRY: "gitlab.iceymoss:5050"
   CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
-  # 镜像标签：使用分支名和 commit SHA
+  
+  # 镜像标签策略：使用分支名和 commit SHA
+  # - IMAGE_TAG: 分支名标签（如 master, develop）
+  # - IMAGE_TAG_LATEST: latest 标签（最新版本）
+  # - IMAGE_TAG_COMMIT: commit SHA 标签（精确版本，用于部署）
   IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
   IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
-# 构建并推送 Docker 镜像
+  # ArgoCD 同步配置（可在 GitLab CI/CD Variables 中覆盖）
+  # - ARGOCD_SERVER: ArgoCD Server 地址，如 https://argocd.iceymoss 或 argocd-server.argocd.svc.cluster.local:443
+  # - ARGOCD_USERNAME / ARGOCD_PASSWORD: 登录凭据（推荐在 GitLab 中设置 Masked 变量）
+  # - ARGOCD_APP_NAME: 需要同步的 Application 名称
+  # - ARGOCD_SYNC_TIMEOUT: 等待同步的超时时间（秒）
+  ARGOCD_SERVER: "https://localhost:8443"
+  ARGOCD_APP_NAME: "hichat"
+  ARGOCD_SYNC_TIMEOUT: "300"
+
+# ============================================================================
+# Stage 1: 构建并推送 Docker 镜像
+# ============================================================================
+# 作用：将源代码构建成 Docker 镜像并推送到 GitLab Container Registry
+# 流程位置：开发者推送代码 → GitLab 触发 Pipeline → build 阶段执行
+# 输出：Registry 中的三个镜像标签（分支名、latest、commit SHA）
+# 下一步：build 成功后触发 update-config 阶段
+# ============================================================================
 build:
   stage: build
-  image: docker:24
+  image: docker:24  # 使用 Docker 官方镜像作为执行环境
+  
+  # Docker-in-Docker 服务：在容器内运行 Docker daemon
   services:
     - name: docker:24-dind
-      command: ["--insecure-registry=gitlab.iceymoss:5050"]
+      command: ["--insecure-registry=gitlab.iceymoss:5050"]  # 配置本地 Registry 为不安全模式
+  
   before_script:
-    # 使用 GitLab CI Token 登录 Registry
+    # 登录 GitLab Container Registry
+    # 使用 GitLab CI Token 进行认证，无需额外配置
     - |
       echo "登录 GitLab Container Registry: $CI_REGISTRY"
       if [ -n "$CI_REGISTRY_USER" ] && [ -n "$CI_REGISTRY_PASSWORD" ]; then
@@ -31,51 +74,138 @@ build:
         echo "使用 GitLab CI Token 登录"
         docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
       fi
+  
   script:
+    # 步骤 1: 构建 Docker 镜像（使用 Dockerfile 多阶段构建）
+    # - Builder 阶段：使用 golang:1.17-alpine 编译 Go 应用
+    # - Runtime 阶段：使用 alpine:latest 准备运行环境
     - echo "构建 Docker 镜像..."
     - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
+    
+    # 步骤 2: 推送镜像到 Registry（三个标签）
+    # - 分支名标签：用于标识分支（如 master, develop）
+    # - latest 标签：最新版本（向后兼容）
+    # - commit SHA 标签：精确版本（用于部署，可追溯）
     - echo "推送镜像到 GitLab Container Registry..."
     - docker push $IMAGE_TAG
     - docker push $IMAGE_TAG_LATEST
     - docker push $IMAGE_TAG_COMMIT
+    
+    # 步骤 3: 输出镜像信息（用于日志和调试）
     - echo "镜像构建完成:"
     - echo "  - $IMAGE_TAG"
     - echo "  - $IMAGE_TAG_LATEST"
     - echo "  - $IMAGE_TAG_COMMIT"
+  
+  # 触发条件：只在指定分支或合并请求时执行
   only:
     - main
-    - master
-    - develop
-    - merge_requests
+    - master      # 主分支：生产环境部署
+    - develop     # 开发分支：开发环境部署
+    - merge_requests  # 合并请求：代码审查时构建
+  
+  # 使用带有 docker 标签的 Runner（支持 Docker-in-Docker）
   tags:
     - docker
-# 更新 Kubernetes 配置中的镜像标签（推送到配置分支）
+# ============================================================================
+# Stage 2: 更新 Kubernetes 配置（配置分支方案）
+# ============================================================================
+# 作用：更新 k8s-config 分支的配置文件，触发 ArgoCD 自动部署
+# 流程位置：build 成功 → update-config 执行 → 推送到 k8s-config 分支 → ArgoCD 检测变化
+# 关键点：
+#   - 配置更新在 k8s-config 分支，不在 master 分支（保持 master 分支 Git 历史干净）
+#   - 使用 commit SHA 作为镜像标签（精确版本，可追溯）
+#   - 使用 [skip ci] 避免循环触发 Pipeline
+# 下一步：ArgoCD 检测到 k8s-config 分支变化后自动同步到 Kubernetes 集群
+# ============================================================================
 update-config:
   stage: update-config
-  image: alpine/git:latest
+  image: alpine/git:latest  # 轻量级镜像，包含 git 命令
+  
   before_script:
+    # 配置 Git 用户信息（用于 commit）
     - git config --global user.email "ci@gitlab.iceymoss"
     - git config --global user.name "GitLab CI"
+  
   script:
     - echo "更新 Kubernetes 配置文件中的镜像标签..."
-    # 检出或创建配置分支
+    
+    # 步骤 1: 检出或创建配置分支
+    # - 尝试从远程获取 k8s-config 分支
+    # - 如果分支不存在，则创建新分支
+    # 目的：确保配置分支存在，用于存储 Kubernetes 配置文件
     - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
     - git checkout k8s-config
-    # 同步 master 分支的 k8s 目录（确保配置分支包含最新的 k8s 文件）
+    
+    # 步骤 2: 同步 master 分支的 k8s 目录
+    # - 从 master 分支检出 k8s/ 目录到当前分支
+    # 目的：确保配置分支包含最新的 k8s 配置文件（除了镜像标签）
+    # 注意：如果 k8s 目录已存在且是最新的，此步骤会被忽略
     - git checkout master -- k8s/ 2>/dev/null || echo "k8s 目录已存在"
-    # 更新镜像标签
+    
+    # 步骤 3: 更新镜像标签
+    # - 使用 sed 替换 k8s/hichat.yaml 中的镜像标签
+    # - 从 latest 或旧版本改为 commit SHA（如 24f307d6）
+    # 目的：使用精确的 commit SHA 作为镜像标签，确保可追溯和可回滚
     - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
     - echo "更新后的镜像配置:"
     - grep "image:" k8s/hichat.yaml
-    # 提交更改到配置分支
+    
+    # 步骤 4: 提交更改到配置分支
+    # - 添加修改的文件
+    # - 提交更改，使用 [skip ci] 避免触发新的 Pipeline
+    # - 如果文件没有变化（镜像标签相同），允许继续执行（|| exit 0）
     - git add k8s/hichat.yaml
     - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || exit 0
-    # 推送到配置分支（不是 master）
+    
+    # 步骤 5: 推送到配置分支（不是 master）
+    # - 使用 CI_JOB_TOKEN 进行认证（GitLab 自动提供）
+    # - 推送到 k8s-config 分支，不是 master 分支
+    # - 如果推送失败或没有变化，允许继续执行（|| exit 0）
+    # 目的：更新配置分支，触发 ArgoCD 检测变化
     - git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config || exit 0
+    
+    # 步骤 6: 输出完成信息
+    # 说明：ArgoCD 会检测到 k8s-config 分支的变化，自动同步部署
     - echo "配置更新完成，已推送到 k8s-config 分支，ArgoCD 将自动同步部署"
+
+    # 步骤 7: （可选）触发 ArgoCD 同步并等待结果
+    # - 若希望在 CI 中直接看到部署结果，请在 GitLab CI/CD Variables 中配置：
+    #   ARGOCD_SERVER, ARGOCD_USERNAME, ARGOCD_PASSWORD（或 ARGOCD_AUTH_TOKEN）
+    # - 如果这些变量未配置，将提示并使 job 失败，提醒开发者补充配置
+    - |
+      if [ -z "$ARGOCD_SERVER" ] || { [ -z "$ARGOCD_USERNAME" ] && [ -z "$ARGOCD_AUTH_TOKEN" ]; }; then
+        echo "ERROR: ArgoCD 登录信息未配置 (ARGOCD_SERVER / ARGOCD_USERNAME 或 ARGOCD_AUTH_TOKEN)。";
+        echo "请在 GitLab CI/CD Variables 中设置后再试。";
+        exit 1;
+      fi
+    - echo "触发 ArgoCD 同步，并等待 $ARGOCD_SYNC_TIMEOUT 秒内完成..."
+    # 安装 argocd CLI（若镜像内未预装）
+    - apk add --no-cache curl ca-certificates >/dev/null
+    - curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+    - chmod +x /usr/local/bin/argocd
+    # 登录 ArgoCD（优先使用 Token，其次用户名/密码）
+    - |
+      if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+        argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web --insecure
+      else
+        argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --grpc-web --insecure
+      fi
+    # 触发同步并等待结果
+    - argocd app sync "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --prune
+    - argocd app wait "$ARGOCD_APP_NAME" --timeout "$ARGOCD_SYNC_TIMEOUT" --health --sync
+    - echo "ArgoCD 同步成功，部署完成 ✅"
+  
+  # 触发条件：只在 master 分支的代码推送时执行
+  # 原因：只有主分支的代码才需要部署到生产环境
   only:
-    - master  # 只在 master 分支的代码推送时触发
-  when: on_success  # 只在 build 阶段成功后才执行
+    - master
+  
+  # 执行时机：只在 build 阶段成功后才执行
+  # 原因：确保镜像已成功构建并推送到 Registry
+  when: on_success
+  
+  # 使用带有 docker 标签的 Runner
   tags:
     - docker
 

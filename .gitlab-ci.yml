@@ -60,8 +60,7 @@ update-config:
   script:
     - echo "更新 Kubernetes 配置文件中的镜像标签..."
     # 更新 k8s/hichat.yaml 中的镜像标签为 commit SHA
-    - |
-      sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
+    - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
     # 显示更新后的内容（用于调试）
     - echo "更新后的镜像配置:"
     - grep "image:" k8s/hichat.yaml
@@ -69,9 +68,7 @@ update-config:
     - git add k8s/hichat.yaml
     - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "没有变化，跳过提交"
     # 推送到 Git 仓库（使用 CI Token）
-    - |
-      git push https://oauth2:${CI_JOB_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:master || \
-      echo "推送失败或没有变化"
+    - git push https://oauth2:${CI_JOB_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:master || echo "推送失败或没有变化"
     - echo "配置更新完成，ArgoCD 将自动同步部署"
   only:
     - master  # 只在 master 分支执行

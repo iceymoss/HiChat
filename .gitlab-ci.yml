@@ -1,5 +1,6 @@
 stages:
   - build
+  - update-config
 
 variables:
   DOCKER_DRIVER: overlay2
@@ -28,5 +29,17 @@ build:
     - master
     - develop
     - merge_requests
+  tags:
+    - docker
+
+update-config:
+  stage: update-config
+  image: alpine/git:latest
+  script:
+    - echo "开始更新配置..."
+    - echo "配置更新完成"
+  only:
+    - master
+  when: on_success
   tags:
     - docker

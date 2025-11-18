@@ -21,8 +21,8 @@ build:
     - name: docker:24-dind
       command: ["--insecure-registry=gitlab.iceymoss:5050"]
   before_script:
-    - 'echo "登录 GitLab Container Registry: $CI_REGISTRY"'
-    - 'docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY'
+    - echo Logging in to GitLab Container Registry
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
   script:
     - echo "构建 Docker 镜像..."
     - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .

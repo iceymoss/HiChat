@@ -95,50 +95,57 @@ build:
 update-config:
   stage: update-config
   image: ubuntu:22.04
-  
+
   before_script:
-    # 更新包管理器并安装 git
     - apt-get update
     - apt-get install -y git curl
-    # 配置 Git 用户信息
     - git config --global user.email "ci@gitlab.iceymoss"
     - git config --global user.name "GitLab CI"
-  
+
   script:
     - |
       echo "开始更新配置..."
       
-      # 步骤 1: 检出或创建配置分支
-      echo "步骤 1 => 检出或创建 k8s-config 分支"
-      git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
-      git checkout k8s-config 2>/dev/null || git checkout -b k8s-config
-      echo "当前分支=>"
-      git branch
+      # 步骤 1: 安全检出或创建配置分支
+      echo "步骤 1 => 安全检出或创建 k8s-config 分支"
+      if git show-ref --quiet refs/heads/k8s-config; then
+        echo "k8s-config 分支已存在，检出该分支"
+        git checkout k8s-config
+        git pull origin k8s-config
+      else
+        echo "k8s-config 分支不存在，创建新分支"
+        git checkout -b k8s-config
+      fi
       
       # 步骤 2: 同步 master 分支的 k8s 目录
       echo "步骤 2 => 同步 master 分支的 k8s 目录"
-      git checkout master -- k8s/ 2>/dev/null || echo "k8s 目录已存在"
-      echo "k8s 目录同步完成"
+      git checkout master -- k8s/
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"
       sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
-      echo "更新后的镜像配置=>"
+      echo "更新后的镜像配置:"
       grep "image:" k8s/hichat.yaml
       
-      # 步骤 4: 提交更改到配置分支
+      # 步骤 4: 提交更改
       echo "步骤 4 => 提交更改到配置分支"
       git add k8s/hichat.yaml
-      git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || exit 0
       
-      # 步骤 5: 推送到配置分支
-      echo "步骤 5 => 推送到配置分支"
-      git push http://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config || exit 0
+      # 检查是否有需要提交的更改
+      if git diff-index --quiet HEAD --; then
+        echo "没有检测到更改，跳过提交"
+      else
+        git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]"
       
-      # 步骤 6: 输出完成信息
-      echo "配置更新完成，已推送到 k8s-config 分支"
-      echo "ArgoCD 将自动检测分支变化并同步部署到集群"
-  
+        # 步骤 5: 推送到配置分支
+        echo "步骤 5 => 推送到配置分支"
+        git push http://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
+      
+        # 步骤 6: 输出完成信息
+        echo "配置更新完成，已推送到 k8s-config 分支"
+        echo "ArgoCD 将自动检测分支变化并同步部署到集群"
+      fi
+
   # 触发条件：只在 master 分支的代码推送时执行
   # 原因：只有主分支的代码才需要部署到生产环境
   only:

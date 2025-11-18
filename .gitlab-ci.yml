@@ -21,8 +21,16 @@ build:
     - name: docker:24-dind
       command: ["--insecure-registry=gitlab.iceymoss:5050"]
   before_script:
-    - echo Logging in to GitLab Container Registry
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    # 使用 GitLab CI Token 登录 Registry
+    - |
+      echo "登录 GitLab Container Registry: $CI_REGISTRY"
+      if [ -n "$CI_REGISTRY_USER" ] && [ -n "$CI_REGISTRY_PASSWORD" ]; then
+        echo "使用 GitLab 自动提供的认证信息登录"
+        docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+      else
+        echo "使用 GitLab CI Token 登录"
+        docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+      fi
   script:
     - echo "构建 Docker 镜像..."
     - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
@@ -51,16 +59,14 @@ update-config:
     - git config --global user.name "GitLab CI"
   script:
     - echo "更新 Kubernetes 配置文件中的镜像标签..."
-    # 更新 k8s/hichat.yaml 中的镜像标签为 commit SHA
     - sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
-    # 显示更新后的内容（用于调试）
     - echo "更新后的镜像配置:"
     - grep "image:" k8s/hichat.yaml
-    # 提交更改
     - git add k8s/hichat.yaml
-    - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "没有变化，跳过提交"
-    # 推送到 Git 仓库（使用 CI Token）
-    - git push https://oauth2:${CI_JOB_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:master || echo "推送失败或没有变化"
+    - |
+      git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || echo "No changes, skipping commit"
+    - |
+      git push https://oauth2:${CI_JOB_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:master || echo "Push failed or no changes"
     - echo "配置更新完成，ArgoCD 将自动同步部署"
   only:
     - master  # 只在 master 分支执行

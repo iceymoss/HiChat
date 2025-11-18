@@ -96,8 +96,18 @@ update-config:
   stage: update-config
   image: alpine:latest
   
+  before_script:
+    # 安装 git
+    - apk add --no-cache git
+    # 配置 Git 用户信息
+    - git config --global user.email "ci@gitlab.iceymoss"
+    - git config --global user.name "GitLab CI"
+  
   script:
     - echo "开始更新配置..."
+    # 测试简单的 Git 操作
+    - git status
+    - git branch -a
     - echo "配置更新完成"
   
   only:

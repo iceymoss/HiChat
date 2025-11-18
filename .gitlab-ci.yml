@@ -96,11 +96,20 @@ update-config:
   stage: update-config
   image: alpine/git:latest  # 轻量级镜像，包含 git 命令
   
+  before_script:
+    # 配置 Git 用户信息（用于 commit）
+    - git config --global user.email "ci@gitlab.iceymoss"
+    - git config --global user.name "GitLab CI"
+  
   script:
     # 步骤 1: 输出开始信息
     - echo "开始更新配置..."
     
-    # 步骤 2: 输出完成信息
+    # 步骤 2: 测试简单的 Git 操作
+    - git status
+    - git branch -a
+    
+    # 步骤 3: 输出完成信息
     - echo "配置更新完成"
   
   # 触发条件：只在 master 分支的代码推送时执行

@@ -1,76 +1,32 @@
-#stages:
-#  - build
-#
-#variables:
-#  DOCKER_DRIVER: overlay2
-#  DOCKER_TLS_CERTDIR: ""
-#  # 本地 GitLab Registry 地址（包含端口）
-#  CI_REGISTRY: "gitlab.iceymoss:5050"
-#  CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
-#  # 镜像标签：使用分支名和 commit SHA
-#  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-#  IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
-#  IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-#
-## 构建并推送 Docker 镜像
-#build:
-#  stage: build
-#  image: docker:24
-#  services:
-#    - name: docker:24-dind
-#      command: ["--insecure-registry=gitlab.iceymoss:5050"]
-#  before_script:
-#    # 使用 GitLab CI Token 登录 Registry
-#    - |
-#      echo "登录 GitLab Container Registry: $CI_REGISTRY"
-#      if [ -n "$CI_REGISTRY_USER" ] && [ -n "$CI_REGISTRY_PASSWORD" ]; then
-#        echo "使用 GitLab 自动提供的认证信息登录"
-#        docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-#      else
-#        echo "使用 GitLab CI Token 登录"
-#        docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-#      fi
-#  script:
-#    - echo "构建 Docker 镜像..."
-#    - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
-#    - echo "推送镜像到 GitLab Container Registry..."
-#    - docker push $IMAGE_TAG
-#    - docker push $IMAGE_TAG_LATEST
-#    - docker push $IMAGE_TAG_COMMIT
-#    - echo "镜像构建完成:"
-#    - echo "  - $IMAGE_TAG"
-#    - echo "  - $IMAGE_TAG_LATEST"
-#    - echo "  - $IMAGE_TAG_COMMIT"
-#  only:
-#    - main
-#    - master
-#    - develop
-#    - merge_requests
-#  tags:
-#    - docker
+stages:
+  - build
 
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  CI_REGISTRY: "gitlab.iceymoss:5050"
+  CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
+  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
+  IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
 
-
-build-job:
+build:
   stage: build
+  image: docker:24
+  services:
+    - name: docker:24-dind
+      command: ["--insecure-registry=gitlab.iceymoss:5050"]
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
   script:
-    - echo "Hello, $GITLAB_USER_LOGIN!"
-
-test-job1:
-  stage: test
-  script:
-    - echo "This job tests something"
-
-test-job2:
-  stage: test
-  script:
-    - echo "This job tests something, but takes more time than test-job1."
-    - echo "After the echo commands complete, it runs the sleep command for 20 seconds"
-    - echo "which simulates a test that runs 20 seconds longer than test-job1"
-    - sleep 20
-
-deploy-prod:
-  stage: deploy
-  script:
-    - echo "This job deploys something from the $CI_COMMIT_BRANCH branch."
-  environment: production
+    - docker build -t $IMAGE_TAG -t $IMAGE_TAG_LATEST -t $IMAGE_TAG_COMMIT .
+    - docker push $IMAGE_TAG
+    - docker push $IMAGE_TAG_LATEST
+    - docker push $IMAGE_TAG_COMMIT
+  only:
+    - main
+    - master
+    - develop
+    - merge_requests
+  tags:
+    - docker

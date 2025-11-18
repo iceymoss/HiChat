@@ -111,7 +111,7 @@ update-config:
     - echo "步骤 1 => 检出或创建 k8s-config 分支"
     - git fetch origin k8s-config:k8s-config 2>/dev/null || git checkout -b k8s-config
     - git checkout k8s-config
-    - echo "当前分支:"
+    - echo "当前分支=>"
     - git branch
     
     # 步骤 2: 同步 master 分支的 k8s 目录
@@ -125,10 +125,15 @@ update-config:
     - grep "image:" k8s/hichat.yaml
     - echo "配置更新完成"
   
+  # 触发条件：只在 master 分支的代码推送时执行
+  # 原因：只有主分支的代码才需要部署到生产环境
   only:
     - master
   
+  # 执行时机：只在 build 阶段成功后才执行
+  # 原因：确保镜像已成功构建并推送到 Registry
   when: on_success
   
+  # 使用带有 docker 标签的 Runner
   tags:
     - docker

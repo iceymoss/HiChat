@@ -64,7 +64,7 @@ update-config:
     - grep "image:" k8s/hichat.yaml
     - git add k8s/hichat.yaml
     - git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]" || true
-    - git push https://oauth2:${CI_JOB_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:master || true
+    - git push https://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:master || true
     - echo "配置更新完成，ArgoCD 将自动同步部署"
   only:
     - master  # 只在 master 分支执行

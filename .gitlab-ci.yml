@@ -140,7 +140,8 @@ update-config:
       
         # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
-        git push http://oauth2:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
+        git remote set-url origin http://gitlab-ci-token:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git
+        git push origin HEAD:k8s-config
       
         # 步骤 6: 输出完成信息
         echo "配置更新完成，已推送到 k8s-config 分支"

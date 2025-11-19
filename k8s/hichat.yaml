@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: hichat
-        image: gitlab.iceymoss:5050/root/hichat:latest  # 使用 GitLab Registry 镜像
+        image: 172.21.0.1:5050/root/hichat:latest  # 使用 GitLab Registry 镜像
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

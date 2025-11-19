@@ -11,7 +11,7 @@ spec:
   
   # 源仓库配置
   source:
-    repoURL: http://172.21.0.1/root/hichat.git
+    repoURL: https://github.com/iceymoss/HiChat.git
     targetRevision: k8s-config  # 监控配置分支（不是 master）
     path: k8s  # k8s 配置文件所在目录
   

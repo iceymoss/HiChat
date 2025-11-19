@@ -22,19 +22,16 @@ variables:
   # Docker 配置
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""  # 禁用 TLS（本地 Registry 使用 HTTP）
-  
-  # GitLab Container Registry 配置
-  # 本地 GitLab Registry 地址（包含端口）
-  CI_REGISTRY: "gitlab.iceymoss:5050"
-  CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
-  
-  # 镜像标签策略：使用分支名和 commit SHA
-  # - IMAGE_TAG: 分支名标签（如 master, develop）
-  # - IMAGE_TAG_LATEST: latest 标签（最新版本）
-  # - IMAGE_TAG_COMMIT: commit SHA 标签（精确版本，用于部署）
-  IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-  IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
-  IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+  # Docker Hub 配置
+  DOCKERHUB_REGISTRY: "docker.io"
+  DOCKERHUB_REPOSITORY: "$DOCKERHUB_USERNAME/hichat"
+
+  # 镜像标签策略（Docker Hub）
+  DOCKERHUB_IMAGE_BASE: "$DOCKERHUB_REGISTRY/$DOCKERHUB_REPOSITORY"
+  IMAGE_TAG: $DOCKERHUB_IMAGE_BASE:$CI_COMMIT_REF_SLUG
+  IMAGE_TAG_LATEST: $DOCKERHUB_IMAGE_BASE:latest
+  IMAGE_TAG_COMMIT: $DOCKERHUB_IMAGE_BASE:$CI_COMMIT_SHORT_SHA
 
 # ============================================================================
 # Stage 1: 构建并推送 Docker 镜像
@@ -54,9 +51,8 @@ build:
       command: ["--insecure-registry=gitlab.iceymoss:5050"]  # 配置本地 Registry 为不安全模式
   
   before_script:
-    # 登录 GitLab Container Registry
-    # 使用 GitLab CI Token 进行认证，无需额外配置
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    # 登录 Docker Hub（在 GitLab CI 变量中配置 DOCKERHUB_USERNAME/DOCKERHUB_PASSWORD）
+    - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin $DOCKERHUB_REGISTRY
   
   script:
     # 步骤 1: 构建 Docker 镜像（使用 Dockerfile 多阶段构建）
@@ -130,7 +126,7 @@ update-config:
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"
-      sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
+      sed -i "s|image:.*hichat.*|image: $IMAGE_TAG_COMMIT|g" k8s/hichat.yaml
       echo "更新后的镜像配置:"
       grep "image:" k8s/hichat.yaml
       

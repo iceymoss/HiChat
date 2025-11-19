@@ -119,7 +119,8 @@ update-config:
       
       # 步骤 2: 同步 master 分支的 k8s 目录
       echo "步骤 2 => 同步 master 分支的 k8s 目录"
-      git checkout master -- k8s/
+      git fetch origin master
+      git checkout origin/master -- k8s/ 
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"

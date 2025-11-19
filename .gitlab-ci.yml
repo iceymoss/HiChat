@@ -110,8 +110,9 @@ update-config:
       
       # 步骤 1: 安全检出或创建配置分支
       echo "步骤 1 => 安全检出或创建 k8s-config 分支"
+      git fetch origin k8s-config:k8s-config || true
       if git show-ref --quiet refs/heads/k8s-config; then
-        echo "k8s-config 分支已存在，检出该分支"
+        echo "k8s-config 分支已存在，检出并同步远程"
         git checkout k8s-config
         git pull origin k8s-config
       else

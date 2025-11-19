@@ -96,11 +96,17 @@ update-config:
   stage: update-config
   image: ubuntu:22.04
 
+  # 添加 Git 深度配置，确保能获取所有分支信息
+  variables:
+    GIT_DEPTH: 0  # 获取完整历史记录，包括所有分支
+
   before_script:
     - apt-get update
     - apt-get install -y git curl
     - git config --global user.email "ci@gitlab.iceymoss"
     - git config --global user.name "GitLab CI"
+    # 获取所有分支信息，确保能访问 master 分支
+    - git fetch --all
 
   script:
     - |
@@ -140,7 +146,17 @@ update-config:
       
         # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
-        git remote set-url origin http://gitlab-ci-token:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git
+        # 使用个人访问令牌进行推送（需要先在GitLab项目中配置PUSH_TOKEN变量）
+        # 如果PUSH_TOKEN变量不存在，则回退到使用CI_JOB_TOKEN
+        if [ -n "$PUSH_TOKEN" ]; then
+          echo "使用PUSH_TOKEN进行推送"
+          git remote set-url origin https://oauth2:$PUSH_TOKEN@gitlab.iceymoss/root/hichat.git
+        else
+          echo "使用CI_JOB_TOKEN进行推送（可能需要调整分支保护设置）"
+          git remote set-url origin http://gitlab-ci-token:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git
+        fi
+      
+        # 执行推送操作
         git push origin HEAD:k8s-config
       
         # 步骤 6: 输出完成信息

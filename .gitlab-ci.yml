@@ -143,6 +143,8 @@ update-config:
       
         # 步骤 5: 推送到配置分支（使用安全强制推送）
         echo "步骤 5 => 推送到配置分支"
+        git fetch origin k8s-config
+        git reset --hard origin/k8s-config
         git push --force-with-lease http://${GITLAB_USERNAME}:${PERSONAL_ACCESS_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
       
         # 步骤 6: 输出完成信息

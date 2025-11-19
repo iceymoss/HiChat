@@ -126,7 +126,7 @@ update-config:
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"
-      sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
+      sed -i "s|image:.*hichat.*|image: $DOCKER_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
       echo "更新后的镜像配置:"
       grep "image:" k8s/hichat.yaml
       

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: hichat
-        image: docker.io/iceymoss/hichat:latest  # 使用 Docker Hub 镜像
+        image: docker.io/iceymoss/hichat:cead80c3  # 使用 Docker Hub 镜像
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

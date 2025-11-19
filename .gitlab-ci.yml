@@ -153,7 +153,6 @@ update-config:
         echo "配置更新完成，已推送到 k8s-config 分支"
         echo "ArgoCD 将自动检测分支变化并同步部署到集群"
       fi
-
   # 触发条件：只在 master 分支的代码推送时执行
   # 原因：只有主分支的代码才需要部署到生产环境
   only:

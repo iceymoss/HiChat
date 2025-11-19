@@ -103,21 +103,20 @@ update-config:
     - git config --global user.name "GitLab CI"
     # 获取所有分支信息，确保能访问 master 分支
     - git fetch --all
-    - git config --global pull.rebase false  # 添加合并策略配置
+
   script:
     - |
       echo "开始更新配置..."
       
-      # 步骤 1 => 
-      if git show-ref --quiet refs/remotes/origin/k8s-config; then
-        echo "k8s-config 分支已存在，检出并同步远程"
-        # 创建本地分支并跟踪远程分支
-        git checkout -B k8s-config origin/k8s-config
-        # 使用合并策略拉取远程更改（允许合并冲突）
-        git pull --no-rebase origin k8s-config || echo "拉取完成或存在冲突，继续执行"
+      # 步骤 1: 安全检出或创建配置分支
+      echo "步骤 1 => 安全检出或创建 k8s-config 分支"
+      if git show-ref --quiet refs/heads/k8s-config; then
+        echo "k8s-config 分支已存在，检出该分支"
+        git checkout k8s-config
+        git pull origin k8s-config
       else
         echo "k8s-config 分支不存在，创建新分支"
-        git checkout -b k8s-config origin/master
+        git checkout -b k8s-config
       fi
       
       # 步骤 2: 同步 master 分支的 k8s 目录
@@ -127,7 +126,7 @@ update-config:
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"
-      sed -i "s|image:.*hichat.*|image: $IMAGE_TAG_COMMIT|g" k8s/hichat.yaml
+      sed -i "s|image:.*hichat.*|image: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
       echo "更新后的镜像配置:"
       grep "image:" k8s/hichat.yaml
       
@@ -141,18 +140,24 @@ update-config:
       else
         git commit -m "chore: update image to $CI_COMMIT_SHORT_SHA [skip ci]"
       
-        # 步骤 5: 推送到配置分支（使用安全强制推送）
+        # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
-        git fetch origin k8s-config
-        git reset --hard origin/k8s-config
-        git push --force-with-lease http://${GITLAB_USERNAME}:${PERSONAL_ACCESS_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
+        # 使用部署令牌进行认证（替换 CI_JOB_TOKEN）
+        git push http://${GITLAB_USERNAME}:${PERSONAL_ACCESS_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
       
         # 步骤 6: 输出完成信息
         echo "配置更新完成，已推送到 k8s-config 分支"
         echo "ArgoCD 将自动检测分支变化并同步部署到集群"
       fi
+  # 触发条件：只在 master 分支的代码推送时执行
+  # 原因：只有主分支的代码才需要部署到生产环境
   only:
     - master
+
+  # 执行时机：只在 build 阶段成功后才执行
+  # 原因：确保镜像已成功构建并推送到 Registry
   when: on_success
+
+  # 使用带有 docker 标签的 Runner
   tags:
     - docker

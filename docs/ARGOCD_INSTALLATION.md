@@ -377,23 +377,17 @@ argocd login localhost:8443 --username admin --password <ADMIN_PASSWORD> --insec
 
 #### 步骤 3: 添加 Git 仓库
 
-**重要**: 由于 ArgoCD 运行在 Kubernetes 集群内部，无法解析本地域名（如 `gitlab.iceymoss`），需要使用 IP 地址。
+目前部署使用 GitHub 上的公共仓库 `iceymoss/HiChat`，ArgoCD 可以直接通过 HTTPS 访问，无需再解析本地域名或指定网关 IP。
 
 ```bash
-# 获取 GitLab 的 IP 地址（通常是 k3d 网络的网关 IP）
-docker network inspect k3d-mycluster | grep Gateway
-# 通常是 172.21.0.1
+# 直接添加 GitHub 仓库（公开仓库无需凭证）
+argocd repo add https://github.com/iceymoss/HiChat.git
 
-# 添加 Git 仓库（使用 IP 地址）
-argocd repo add http://172.21.0.1/root/hichat.git \
-  --username root \
-  --password 'YOUR_GITLAB_PASSWORD' \
-  --insecure
+# 如果后续改为私有仓库，可改用以下命令并提供 PAT
+# argocd repo add https://github.com/iceymoss/HiChat.git \
+#   --username <GITHUB_USER> \
+#   --password '<PERSONAL_ACCESS_TOKEN>'
 ```
-
-**注意**: 
-- 密码包含特殊字符时，使用单引号包裹
-- 如果密码是 base64 编码的，需要先解码：`echo "BASE64_STRING" | base64 -d`
 
 #### 步骤 4: 验证仓库添加成功
 
@@ -402,8 +396,8 @@ argocd repo add http://172.21.0.1/root/hichat.git \
 argocd repo list
 
 # 应该看到类似输出：
-# TYPE  NAME  REPO                               INSECURE  STATUS      MESSAGE
-# git         http://172.21.0.1/root/hichat.git  false     Successful
+# TYPE  NAME  REPO                                INSECURE  STATUS      MESSAGE
+# git         https://github.com/iceymoss/HiChat.git  false  Successful
 ```
 
 ### 方法 2: 在 ArgoCD UI 中添加
@@ -413,9 +407,8 @@ argocd repo list
 3. 点击 **Connect Repo**
 4. 填写仓库信息：
    - **Type**: Git
-   - **Repository URL**: `http://172.21.0.1/root/hichat.git`（使用 IP 地址）
-   - **Username**: `root`
-   - **Password**: 你的 GitLab 密码
+   - **Repository URL**: `https://github.com/iceymoss/HiChat.git`
+   - **Username/Password**: 公开仓库可留空；若改为私有，则填入 GitHub 账号与 PAT
 5. 点击 **Connect**
 
 ---
@@ -442,7 +435,7 @@ spec:
   
   # 源仓库配置
   source:
-    repoURL: http://172.21.0.1/root/hichat.git
+    repoURL: https://github.com/iceymoss/HiChat.git
     targetRevision: master  # 监控 master 分支
     path: k8s  # k8s 配置文件所在目录
   
@@ -511,6 +504,36 @@ apps               Deployment             Synced   Healthy
                    Service                Synced   Healthy
 ...
 ```
+
+---
+
+## 手动推送 GitHub `k8s-config` 分支（无需 CI/CD）
+
+目前我们直接手动维护 GitHub 仓库 `iceymoss/HiChat` 的 `k8s-config` 分支即可触发 ArgoCD，同步流程如下：
+
+1. **确认远程为 GitHub**  
+   ```bash
+   git remote -v
+   # origin  https://github.com/iceymoss/HiChat.git
+   ```
+2. **切换到配置分支并同步最新内容**  
+   ```bash
+   git checkout master && git pull
+   git checkout k8s-config
+   git checkout master -- k8s/
+   ```
+3. **编辑需要变更的清单**  
+   - 例如把 `k8s/hichat.yaml` 的镜像标签手动改成最新版本；
+   - 或者新增/删除其它 Kubernetes 资源。
+4. **提交并推送到 GitHub**  
+   ```bash
+   git add k8s/
+   git commit -m "chore: update manifests"
+   git push origin k8s-config
+   ```
+5. **等待 ArgoCD 自动同步**（也可以执行 `argocd app sync hichat` 手动立即同步）。
+
+> 只要 `k8s-config` 分支成功推送到 GitHub，ArgoCD 会把变更部署到集群，因此即使没有 CI/CD 流水线也能维持完整的 GitOps 回路。
 
 ---
 
@@ -701,25 +724,20 @@ argocd app sync hichat --force
 
 ### 问题 1: 无法添加 Git 仓库 - DNS 解析失败
 
-**错误信息**:
+**错误信息示例**:
 ```
 lookup gitlab.iceymoss on 10.43.0.10:53: no such host
 ```
 
-**原因**: ArgoCD 运行在集群内部，无法解析本地域名。
+**原因**: 集群内部无法解析本地域名，或无法访问内网 Git 服务。
 
-**解决方案**: 使用 IP 地址而不是域名：
+**解决方案**:
 
-```bash
-# 获取 GitLab 的 IP（通常是 k3d 网络网关）
-docker network inspect k3d-mycluster | grep Gateway
-
-# 使用 IP 地址添加仓库
-argocd repo add http://172.21.0.1/root/hichat.git \
-  --username root \
-  --password 'PASSWORD' \
-  --insecure
-```
+- 优先使用公共可访问的 GitHub 仓库（默认已切换为 `https://github.com/iceymoss/HiChat.git`）：
+  ```bash
+  argocd repo add https://github.com/iceymoss/HiChat.git
+  ```
+- 如果必须使用内网 GitLab/Gitea，可以按需获取网关 IP 并使用 `http://<IP>/<repo>.git` 方式添加。
 
 ### 问题 2: Application 同步失败
 
@@ -732,7 +750,7 @@ argocd repo add http://172.21.0.1/root/hichat.git \
 
 2. **检查仓库连接**:
    ```bash
-   argocd repo get http://172.21.0.1/root/hichat.git
+   argocd repo get https://github.com/iceymoss/HiChat.git
    ```
 
 3. **查看 Application 详情**:

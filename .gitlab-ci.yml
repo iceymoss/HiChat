@@ -146,18 +146,8 @@ update-config:
       
         # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
-        # 使用个人访问令牌进行推送（需要先在GitLab项目中配置PUSH_TOKEN变量）
-        # 如果PUSH_TOKEN变量不存在，则回退到使用CI_JOB_TOKEN
-        if [ -n "$PUSH_TOKEN" ]; then
-          echo "使用PUSH_TOKEN进行推送"
-          git remote set-url origin https://oauth2:$PUSH_TOKEN@gitlab.iceymoss/root/hichat.git
-        else
-          echo "使用CI_JOB_TOKEN进行推送（可能需要调整分支保护设置）"
-          git remote set-url origin http://gitlab-ci-token:$CI_JOB_TOKEN@gitlab.iceymoss/root/hichat.git
-        fi
-      
-        # 执行推送操作
-        git push origin HEAD:k8s-config
+        # 使用部署令牌进行认证（替换 CI_JOB_TOKEN）
+        git push https://${DEPLOY_USERNAME}:${DEPLOY_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
       
         # 步骤 6: 输出完成信息
         echo "配置更新完成，已推送到 k8s-config 分支"

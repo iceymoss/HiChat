@@ -147,7 +147,7 @@ update-config:
         # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
         # 使用部署令牌进行认证（替换 CI_JOB_TOKEN）
-        git push https://${DEPLOY_USERNAME}:${DEPLOY_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
+        git push http://${DEPLOY_USERNAME}:${DEPLOY_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
       
         # 步骤 6: 输出完成信息
         echo "配置更新完成，已推送到 k8s-config 分支"

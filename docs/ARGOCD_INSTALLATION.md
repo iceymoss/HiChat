@@ -471,15 +471,48 @@ spec:
 
 ### 应用 Application 配置
 
+#### 步骤 1: 应用配置文件
+
 ```bash
 # 应用 ArgoCD Application
 kubectl apply -f k8s/argocd-application.yaml
+```
 
-# 查看 Application 状态
+#### 步骤 2: 验证 Application 创建
+
+```bash
+# 查看 Application 列表
+argocd app list
+
+# 查看 hichat 应用详情
 argocd app get hichat
+```
 
-# 或者在 ArgoCD UI 中查看
-# 访问 https://localhost:8443，点击 Applications
+**预期输出**:
+```
+Name:               argocd/hichat
+Project:            default
+Server:             https://kubernetes.default.svc
+Namespace:          hichat
+Sync Status:        OutOfSync 或 Synced
+Health Status:      Unknown 或 Healthy
+```
+
+#### 步骤 3: 手动触发同步（如果需要）
+
+```bash
+# 手动同步应用
+argocd app sync hichat
+
+# 或者同步并等待完成
+argocd app sync hichat --wait
+```
+
+#### 步骤 4: 查看应用资源状态
+
+```bash
+# 查看应用管理的所有资源
+argocd app resources hichat
 ```
 
 ### 验证 Application 同步
@@ -495,6 +528,35 @@ argocd app sync hichat
 # 查看应用资源
 argocd app resources hichat
 ```
+
+### 注意事项
+
+在应用配置之前，请确认：
+
+1. **分支名称正确**: 
+   - 检查 `k8s/argocd-application.yaml` 中的 `targetRevision` 字段
+   - 确保指定的分支（如 `k8s-config` 或 `master`）存在
+   - 确保该分支包含 `k8s/` 目录下的所有配置文件
+
+2. **配置文件完整**:
+   - 确保 `k8s/` 目录下包含所有必要的 Kubernetes 配置文件
+   - 包括 Deployment、Service、ConfigMap 等
+
+3. **命名空间**:
+   - Application 会在 `destination.namespace` 指定的命名空间中创建资源
+   - 如果命名空间不存在，`CreateNamespace=true` 会自动创建
+
+### 在 ArgoCD UI 中查看
+
+如果已配置端口转发，可以在浏览器中查看：
+
+1. 访问：`https://localhost:8443`
+2. 登录后，点击左侧的 **Applications**
+3. 点击 `hichat` 应用，查看：
+   - 同步状态（Sync Status）
+   - 健康状态（Health Status）
+   - 资源列表和状态
+   - 同步历史记录
 
 **预期输出**:
 ```

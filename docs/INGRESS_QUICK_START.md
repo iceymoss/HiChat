@@ -85,6 +85,22 @@ kubectl get all -n hichat
 curl http://hichat.local:8000
 ```
 
+### 常用命令
+查看所有资源和 Ingress
+```bash
+kubectl get all,ingress -n hichat
+```
+
+查看 Ingress 详细信息
+```bash
+kubectl describe ingress hichat-ingress -n hichat
+```
+
+查看 Pod 日志
+```bash
+kubectl logs -f deployment/hichat -n hichat
+```
+
 ## 常见问题
 
 ### Pod ImagePullBackOff

@@ -101,6 +101,8 @@ update-config:
     - apt-get install -y git curl
     - git config --global user.email "ci@gitlab.iceymoss"
     - git config --global user.name "GitLab CI"
+    # 配置 Git pull 策略为 rebase，避免分支分歧问题
+    - git config --global pull.rebase true
     # 获取所有分支信息，确保能访问 master 分支
     - git fetch --all
 
@@ -113,10 +115,18 @@ update-config:
       if git show-ref --quiet refs/heads/k8s-config; then
         echo "k8s-config 分支已存在，检出该分支"
         git checkout k8s-config
+        # 拉取远程更改（已配置 pull.rebase=true，会自动使用 rebase 策略）
         git pull origin k8s-config
       else
         echo "k8s-config 分支不存在，创建新分支"
-        git checkout -b k8s-config
+        # 检查远程是否存在该分支
+        if git show-ref --quiet refs/remotes/origin/k8s-config; then
+          echo "远程存在 k8s-config 分支，检出并跟踪"
+          git checkout -b k8s-config origin/k8s-config
+        else
+          echo "远程不存在 k8s-config 分支，创建新分支"
+          git checkout -b k8s-config
+        fi
       fi
       
       # 步骤 2: 同步 master 分支的 k8s 目录

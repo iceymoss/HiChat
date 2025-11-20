@@ -20,6 +20,9 @@ func Router() *gin.Engine {
 
 	v1 := router.Group("v1")
 
+	test := v1.Group("test")
+	test.GET("/hello/:name", service.Helle)
+
 	//用户模块
 	user := v1.Group("user")
 	{

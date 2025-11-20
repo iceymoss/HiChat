@@ -36,7 +36,7 @@ kubectl get ingressclass
 k3d cluster delete mycluster
 
 # 创建新集群（确保启用 Traefik）
-k3d cluster create mycluster --port "80:80@loadbalancer"
+k3d cluster create mycluster --port "8000:80@loadbalancer"
 ```
 
 ### 步骤 1: 更新 Service 配置

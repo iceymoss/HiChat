@@ -59,7 +59,7 @@
 1. **GitLab** (`http://gitlab.iceymoss`)
    - Git 代码仓库
    - CI/CD Pipeline 管理
-   - Container Registry (`http://gitlab.iceymoss:5050`)
+   - Container Registry (`http://gitlab.iceymoss:5050 或者其他的例如：docker hub`)
 
 2. **GitLab Runner** (WSL 本地)
    - 执行 CI/CD 任务
@@ -145,7 +145,7 @@ GitLab CI/CD Pipeline
   │     │
   │     ├─▶ Runner 启动 docker:24 容器
   │     ├─▶ 启动 docker:24-dind 服务
-  │     ├─▶ 登录 GitLab Registry
+  │     ├─▶ 登录 GitLab Registry (这里也可以使用docker hub)
   │     ├─▶ 执行 Dockerfile 多阶段构建
   │     ├─▶ 打三个标签（master, latest, commit SHA）
   │     └─▶ 推送所有标签到 Registry
@@ -363,15 +363,14 @@ GitLab CI/CD Pipeline
 **当前配置**：
 - `stages`: `build`, `update-config`
 - `build` job: ✅ 正常工作
-- `update-config` job: ⏳ 待修复
+- `update-config` ✅ 正常工作
 
 **关键变量**：
 ```yaml
-CI_REGISTRY: "gitlab.iceymoss:5050"
-CI_REGISTRY_IMAGE: "gitlab.iceymoss:5050/root/hichat"
-IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
-IMAGE_TAG_LATEST: $CI_REGISTRY_IMAGE:latest
-IMAGE_TAG_COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+DOCKERHUB_PASSWORD: docker hub密码
+DOCKERHUB_USERNAME: docker hub用户名
+DOCKER_REGISTRY_IMAGE: docker hub镜像
+PERSONAL_ACCESS_TOKEN: gitlab token
 ```
 
 ---
@@ -405,13 +404,8 @@ FROM alpine:latest
 spec:
   containers:
   - name: hichat
-    image: gitlab.iceymoss:5050/root/hichat:latest  # ⚠️ 固定为 latest
+    image: gitlab.iceymoss:5050/root/hichat:latest  # ⚠️ 固定为 latest,在 ci 中更新为 commit SHA
 ```
-
-**问题**：
-- 镜像标签固定为 `latest`
-- 无法追踪具体版本
-- 需要改为 commit SHA（通过 update-config job 更新）
 
 **更新后**（通过 update-config job）：
 ```yaml
@@ -501,7 +495,7 @@ Dockerfile 构建
   │
   ▼
 GitLab Container Registry
-  gitlab.iceymoss:5050/root/hichat:*
+  docker hub
   │
   │ Kubernetes 拉取
   ▼
@@ -610,33 +604,6 @@ git log --oneline
 argocd app get hichat
 # 应该显示监控 k8s-config 分支
 ```
-
----
-
-## 验证清单
-
-### ✅ 已完成
-
-- [x] GitLab 安装和配置
-- [x] GitLab Runner 安装和注册
-- [x] Container Registry 启用
-- [x] build 阶段成功运行
-- [x] 镜像构建和推送成功（3 个标签）
-- [x] k3d Kubernetes 集群创建
-- [x] ArgoCD 安装和配置
-- [x] ArgoCD Application 创建
-- [x] Kubernetes 资源部署（namespace, mysql, redis, hichat, ingress）
-- [x] 配置分支方案实现
-- [x] update-config job 配置（推送到 k8s-config 分支）
-
-### ⏳ 待完成
-
-- [ ] 创建 k8s-config 分支（初始配置步骤）
-- [ ] 更新 ArgoCD Application 监控配置分支
-- [ ] 测试完整的 GitOps 流程
-- [ ] 验证 ArgoCD 自动同步
-- [ ] 验证滚动更新正常工作
-- [ ] 配置 GitLab Webhook（可选，实现立即触发）
 
 ---
 

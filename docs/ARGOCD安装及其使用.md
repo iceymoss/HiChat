@@ -163,7 +163,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 #### 步骤 2: 端口转发
 
 ```bash
-# 使用 8443 端口（避免与 GitLab 的 8080 端口冲突）
+# 使用 8443 端口（自行选择)
 kubectl port-forward svc/argocd-server -n argocd 8443:443
 ```
 
@@ -386,7 +386,7 @@ docker network inspect k3d-mycluster | grep Gateway
 
 # 添加 Git 仓库（使用 IP 地址）
 argocd repo add http://172.21.0.1/root/hichat.git \
-  --username root \
+  --username 'YOUR_GITLAB_USERNAME \
   --password 'YOUR_GITLAB_PASSWORD' \
   --insecure
 ```
@@ -700,9 +700,6 @@ kubectl get pods -n hichat
 
 # 查看 Deployment 使用的镜像
 kubectl get deployment hichat -n hichat -o jsonpath='{.spec.template.spec.containers[0].image}'
-
-# 应该看到新的 commit SHA 标签，例如：
-# gitlab.iceymoss:5050/root/hichat:832ee3e
 ```
 
 ---

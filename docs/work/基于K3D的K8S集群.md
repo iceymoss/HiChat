@@ -5,7 +5,6 @@
 ---
 
 ## 1. 整体架构与目标
-
 - **宿主环境**: Windows + WSL2（Ubuntu）或原生 Linux
 - **容器运行时**: Docker
 - **K8s 发行版**: k3d（k3s in Docker）

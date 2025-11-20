@@ -115,8 +115,10 @@ update-config:
       if git show-ref --quiet refs/heads/k8s-config; then
         echo "k8s-config 分支已存在，检出该分支"
         git checkout k8s-config
-        # 拉取远程更改（已配置 pull.rebase=true，会自动使用 rebase 策略）
-        git pull origin k8s-config
+        # 强制同步到远程分支（CI 环境中优先使用远程版本，避免冲突）
+        echo "强制同步到远程 k8s-config 分支"
+        git fetch origin k8s-config
+        git reset --hard origin/k8s-config
       else
         echo "k8s-config 分支不存在，创建新分支"
         # 检查远程是否存在该分支

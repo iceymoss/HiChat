@@ -21,6 +21,7 @@ sudo apt-get update
 sudo apt-get install -y curl openssh-server ca-certificates tzdata perl postfix
 ```
 
+
 **注意**: 安装 postfix 时如果提示配置，选择 "No configuration"（如果不需要邮件功能）
 
 ### 2. 安装 GitLab

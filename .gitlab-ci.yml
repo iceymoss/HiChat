@@ -52,6 +52,12 @@ build:
       alias: docker
   
   before_script:
+    # 打印与 Docker 相关的环境变量，方便排查（临时调试用；问题解决后可删除）
+    - env | sort | grep -E '^DOCKER|^CI_'
+    # 强制取消上游注入的 DOCKER_HOST，回到默认通过 /var/run/docker.sock 访问
+    - unset DOCKER_HOST
+    # 再次确认环境变量中已无 DOCKER_HOST
+    - env | sort | grep -E '^DOCKER|^CI_'
     # 检查 Docker daemon 连通性（如无需要可删除）
     - docker info
     # 登录 Docker Hub（在 GitLab CI 变量中配置 DOCKERHUB_USERNAME/DOCKERHUB_PASSWORD）

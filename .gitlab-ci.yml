@@ -22,6 +22,7 @@ variables:
   # Docker 配置
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: ""  # 禁用 TLS（本地 Registry 使用 HTTP）
+  DOCKER_HOST: "tcp://docker:2375"
 
   # Docker Hub 配置
   DOCKERHUB_REGISTRY: "docker.io"
@@ -48,6 +49,7 @@ build:
   # Docker-in-Docker 服务：在容器内运行 Docker daemon
   services:
     - name: docker:24-dind
+      alias: docker
       command: ["--insecure-registry=gitlab.iceymoss:5050"]  # 配置本地 Registry 为不安全模式
   
   before_script:

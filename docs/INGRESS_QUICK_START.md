@@ -16,7 +16,6 @@ k3d cluster create mycluster --port "8000:80@loadbalancer"
 ```
 
 ### 2. 构建并导入镜像
-
 ```bash
 docker build -t hichat:latest .
 k3d image import hichat:latest -c mycluster

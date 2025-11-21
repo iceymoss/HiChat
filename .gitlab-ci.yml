@@ -44,8 +44,7 @@ build:
   # Docker-in-Docker 相关配置，仅在本 Job 内生效
   variables:
     DOCKER_DRIVER: overlay2
-    DOCKER_TLS_CERTDIR: ""      # 禁用 TLS，使用纯 TCP 访问 dind
-    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""      # 禁用 TLS，改用本地 unix socket 访问 dind（/var/run/docker.sock）
 
   # Docker-in-Docker 服务：在容器内运行 Docker daemon
   services:

@@ -39,11 +39,12 @@ variables:
 # ============================================================================
 build:
   stage: build
-  image: docker:24  # 使用 Docker 官方镜像作为执行环境
+  image: docker:27  # docker:27 (client API >= 1.44) 以匹配宿主机 daemon
 
-  # 这里不再使用 docker:dind，而是通过挂载宿主机的 /var/run/docker.sock 来使用宿主机 Docker
+  # 这里通过挂载宿主机的 /var/run/docker.sock 来使用宿主机 Docker
   # 需要在 runner 的 config.toml 中配置：
   #   [runners.docker]
+  #     image = "docker:27"
   #     privileged = true
   #     volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
   before_script:

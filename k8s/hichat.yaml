@@ -13,6 +13,8 @@ spec:
       labels:
         app: hichat
     spec:
+      imagePullSecrets:
+        - name: registry-secret
       containers:
       - name: hichat
         image: 192.168.4.104:5000/admin/hichat:latest  # 使用 Docker Hub 镜像

@@ -38,6 +38,11 @@ spec:
           value: "6379"
         - name: PORT
           value: "8000"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hichat-secrets
+              key: jwt-secret
 ---
 apiVersion: v1
 kind: Service

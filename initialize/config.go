@@ -2,6 +2,7 @@ package initialize
 
 import (
 	"HiChat/global"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ func InitConfig() {
 	v.SetDefault("mysql.password", "Yk?123456")
 	v.SetDefault("redis.host", "127.0.0.1")
 	v.SetDefault("redis.port", 6379)
+	v.SetDefault("jwt_secret", "")
 
 	// 支持环境变量（使用HICHAT作为前缀）
 	v.SetEnvPrefix("HICHAT")
@@ -78,11 +80,17 @@ func InitConfig() {
 			v.Set("redis.port", port)
 		}
 	}
+	if os.Getenv("JWT_SECRET") != "" {
+		v.Set("jwt_secret", os.Getenv("JWT_SECRET"))
+	}
 
 	// 将数据放入global.ServiceConfig
 	if err := v.Unmarshal(&global.ServiceConfig); err != nil {
 		panic(err)
 	}
+	if len(global.ServiceConfig.JWTSecret) < 32 {
+		panic(fmt.Errorf("JWT_SECRET or HICHAT_JWT_SECRET must contain at least 32 bytes"))
+	}
 
-	zap.S().Info("配置信息", global.ServiceConfig)
+	zap.S().Info("服务配置加载完成")
 }

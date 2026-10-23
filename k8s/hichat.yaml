@@ -13,9 +13,11 @@ spec:
       labels:
         app: hichat
     spec:
+      imagePullSecrets:
+        - name: registry-secret
       containers:
       - name: hichat
-        image: docker.io/iceymoss/hichat:latest  # 使用 Docker Hub 镜像 
+        image: 192.168.4.104:5000/admin/hichat:latest  # 使用 Docker Hub 镜像
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -36,6 +38,11 @@ spec:
           value: "6379"
         - name: PORT
           value: "8000"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hichat-secrets
+              key: jwt-secret
 ---
 apiVersion: v1
 kind: Service

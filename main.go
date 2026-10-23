@@ -4,6 +4,7 @@ import (
 	_ "HiChat/docs"
 	"HiChat/global"
 	"HiChat/initialize"
+	"HiChat/middlewear"
 	"HiChat/models"
 	"HiChat/router"
 	"fmt"
@@ -21,6 +22,9 @@ func main() {
 	initialize.InitLogger()
 	//初始化配置
 	initialize.InitConfig()
+	if err := middlewear.SetJWTSecret(global.ServiceConfig.JWTSecret); err != nil {
+		panic(err)
+	}
 	//初始化数据库
 	initialize.InitDB()
 	initialize.InitRedis()

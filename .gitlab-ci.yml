@@ -19,12 +19,8 @@ stages:
 # 全局变量配置
 # ============================================================================
 variables:
-  # Docker 配置
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""  # 禁用 TLS（本地 Registry 使用 HTTP）
-
   # Docker Hub 配置
-  DOCKERHUB_REGISTRY: "docker.io"
+  DOCKERHUB_REGISTRY: $DOCKER_REGISTRY_IMAGE
   DOCKERHUB_REPOSITORY: "$DOCKERHUB_USERNAME/hichat"
 
   # 镜像标签策略（Docker Hub）
@@ -43,14 +39,19 @@ variables:
 # ============================================================================
 build:
   stage: build
-  image: docker:24  # 使用 Docker 官方镜像作为执行环境
-  
-  # Docker-in-Docker 服务：在容器内运行 Docker daemon
-  services:
-    - name: docker:24-dind
-      command: ["--insecure-registry=gitlab.iceymoss:5050"]  # 配置本地 Registry 为不安全模式
-  
+  image: docker:27  # docker:27 (client API >= 1.44) 以匹配宿主机 daemon
+
+  # 这里通过挂载宿主机的 /var/run/docker.sock 来使用宿主机 Docker
+  # 需要在 runner 的 config.toml 中配置：
+  #   [runners.docker]
+  #     image = "docker:27"
+  #     privileged = true
+  #     volumes = ["/var/run/docker.sock:/var/run/docker.sock", "/cache"]
   before_script:
+    # 部分 Runner 会注入 DOCKER_HOST=tcp://docker:2375，这里统一取消，强制走 unix socket
+    - unset DOCKER_HOST
+    # 可选：检查 Docker daemon 连通性
+    - docker info
     # 登录 Docker Hub（在 GitLab CI 变量中配置 DOCKERHUB_USERNAME/DOCKERHUB_PASSWORD）
     - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin $DOCKERHUB_REGISTRY
   
@@ -138,7 +139,7 @@ update-config:
       
       # 步骤 3: 更新镜像标签
       echo "步骤 3 => 更新镜像标签"
-      sed -i "s|image:.*hichat.*|image: $DOCKER_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
+      sed -i "s|image:.*hichat.*|image: $DOCKERHUB_IMAGE_BASE:$CI_COMMIT_SHORT_SHA|g" k8s/hichat.yaml
       echo "更新后的镜像配置:"
       grep "image:" k8s/hichat.yaml
       
@@ -155,7 +156,7 @@ update-config:
         # 步骤 5: 推送到配置分支
         echo "步骤 5 => 推送到配置分支"
         # 使用部署令牌进行认证（替换 CI_JOB_TOKEN）
-        git push http://${GITLAB_USERNAME}:${PERSONAL_ACCESS_TOKEN}@gitlab.iceymoss/root/hichat.git HEAD:k8s-config
+        git push http://${GITLAB_USERNAME}:${PERSONAL_ACCESS_TOKEN}@192.168.4.102/demo/hichat.git HEAD:k8s-config
       
         # 步骤 6: 输出完成信息
         echo "配置更新完成，已推送到 k8s-config 分支"

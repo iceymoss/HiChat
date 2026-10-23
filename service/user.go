@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -167,16 +168,7 @@ func NewUser(ctx *gin.Context) {
 func UpdataUser(ctx *gin.Context) {
 	user := models.UserBasic{}
 
-	id, err := strconv.Atoi(ctx.Request.FormValue("id"))
-	if err != nil {
-		zap.S().Info("类型转换失败", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    -1, //  0成功   -1失败
-			"message": "注销账号失败",
-		})
-		return
-	}
-	user.ID = uint(id)
+	user.ID, _ = middlewear.AuthenticatedUserID(ctx)
 	Name := ctx.Request.FormValue("name")
 	PassWord := ctx.Request.FormValue("password")
 	Email := ctx.Request.FormValue("email")
@@ -204,7 +196,7 @@ func UpdataUser(ctx *gin.Context) {
 		user.Gender = gender
 	}
 
-	_, err = govalidator.ValidateStruct(user)
+	_, err := govalidator.ValidateStruct(user)
 	if err != nil {
 		zap.S().Info("参数不匹配", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{
@@ -238,18 +230,8 @@ func UpdataUser(ctx *gin.Context) {
 // @Router /user/delete [delete]
 func DeleteUser(ctx *gin.Context) {
 	user := models.UserBasic{}
-	id, err := strconv.Atoi(ctx.Request.FormValue("id"))
-	if err != nil {
-		zap.S().Info("类型转换失败", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"code":    -1, //  0成功   -1失败
-			"message": "注销账号失败",
-		})
-		return
-	}
-
-	user.ID = uint(id)
-	err = dao.DeleteUser(user)
+	user.ID, _ = middlewear.AuthenticatedUserID(ctx)
+	err := dao.DeleteUser(user)
 	if err != nil {
 		zap.S().Info("注销用户失败", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -270,7 +252,12 @@ func DeleteUser(ctx *gin.Context) {
 // 同时调用升级程序的方法是安全的
 var upGrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		parsedOrigin, err := url.Parse(origin)
+		return err == nil && parsedOrigin.Host == r.Host
 	},
 }
 
@@ -335,7 +322,8 @@ func MsgHandler(ctx *gin.Context, ws *websocket.Conn) {
 
 // SendUserMsg 发送消息
 func SendUserMsg(ctx *gin.Context) {
-	models.Chat(ctx.Writer, ctx.Request)
+	userID, _ := middlewear.AuthenticatedUserID(ctx)
+	models.Chat(ctx.Writer, ctx.Request, int64(userID))
 }
 
 func ExitUser(ctx *gin.Context) {

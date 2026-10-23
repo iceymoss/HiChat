@@ -2,10 +2,11 @@ package models
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -24,15 +25,16 @@ var saveKey []string
 
 type Message struct {
 	Model
-	FormId   int64  `json:"userId"`   //信息发送者
-	TargetId int64  `json:"targetId"` //信息接收者
-	Type     int    //聊天类型：群聊 私聊 广播
-	Media    int    //信息类型：文字 图片 音频
-	Content  string //消息内容
-	Pic      string `json:"url"` //图片相关
-	Url      string //文件相关
-	Desc     string //文件描述
-	Amount   int    //其他数据大小
+	MessageID string `json:"messageId" gorm:"-"`
+	FormId    int64  `json:"userId"`   //信息发送者
+	TargetId  int64  `json:"targetId"` //信息接收者
+	Type      int    //聊天类型：群聊 私聊 广播
+	Media     int    //信息类型：文字 图片 音频
+	Content   string //消息内容
+	Pic       string `json:"url"` //图片相关
+	Url       string //文件相关
+	Desc      string //文件描述
+	Amount    int    //其他数据大小
 }
 
 func (m *Message) MsgTableName() string {
@@ -45,6 +47,8 @@ type Node struct {
 	Addr      string          //客户端地址
 	DataQueue chan []byte     //消息
 	GroupSets set.Interface   //好友 / 群
+	Done      chan struct{}
+	closeOnce sync.Once
 }
 
 // 映射关系
@@ -54,25 +58,16 @@ var clientMap map[int64]*Node = make(map[int64]*Node, 0)
 var rwLocker sync.RWMutex
 
 // Chat	需要 ：发送者ID ，接受者ID ，消息类型，发送的内容，发送类型
-func Chat(w http.ResponseWriter, r *http.Request) {
-	//1.  获取参数 并 检验 token 等合法性
-	query := r.URL.Query()
-	fmt.Println("handle:", query)
-	Id := query.Get("userId")
-	//token := query.Get("token")
-
-	userId, err := strconv.ParseInt(Id, 10, 64)
-	if err != nil {
-		zap.S().Info("类型转换失败", err)
-		return
-	}
-
+func Chat(w http.ResponseWriter, r *http.Request, userID int64) {
 	//升级为socket
-	var isvalida = true
 	conn, err := (&websocket.Upgrader{
-		//token 校验
 		CheckOrigin: func(r *http.Request) bool {
-			return isvalida
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+			parsedOrigin, err := url.Parse(origin)
+			return err == nil && parsedOrigin.Host == r.Host
 		},
 	}).Upgrade(w, r, nil)
 	if err != nil {
@@ -85,21 +80,23 @@ func Chat(w http.ResponseWriter, r *http.Request) {
 		Conn:      conn,
 		DataQueue: make(chan []byte, 50),
 		GroupSets: set.New(set.ThreadSafe),
+		Done:      make(chan struct{}),
 	}
 
-	//用户关系
-	//将userId和Node绑定
+	// 每个用户只保留一个连接，避免旧连接继续接收私信。
 	rwLocker.Lock()
-	clientMap[userId] = node
+	oldNode := clientMap[userID]
+	clientMap[userID] = node
 	rwLocker.Unlock()
-
-	fmt.Println("uid", userId)
+	if oldNode != nil {
+		_ = oldNode.Conn.Close()
+	}
 
 	//发送消息
 	go sendProc(node)
 	//接收消息
-	go recProc(node)
-	sendMsg(userId, []byte("欢迎进入聊天系统"))
+	go recProc(node, userID)
+	sendMsg(userID, []byte("欢迎进入聊天系统"))
 }
 
 func sendProc(node *Node) {
@@ -109,14 +106,27 @@ func sendProc(node *Node) {
 			err := node.Conn.WriteMessage(websocket.TextMessage, data)
 			if err != nil {
 				zap.S().Info("写入消息失败", err)
+				_ = node.Conn.Close()
 				return
 			}
 			fmt.Println("数据发送socket成功")
+		case <-node.Done:
+			return
 		}
 	}
 }
 
-func recProc(node *Node) {
+func recProc(node *Node, userID int64) {
+	defer func() {
+		node.closeOnce.Do(func() { close(node.Done) })
+		rwLocker.Lock()
+		if clientMap[userID] == node {
+			delete(clientMap, userID)
+		}
+		rwLocker.Unlock()
+		_ = node.Conn.Close()
+	}()
+
 	for {
 		//获取信息
 		_, data, err := node.Conn.ReadMessage()
@@ -125,7 +135,12 @@ func recProc(node *Node) {
 			return
 		}
 
-		brodMsg(data)
+		data, err = authenticatedMessage(data, userID)
+		if err != nil {
+			zap.S().Info("消息解析失败", err)
+			continue
+		}
+		dispatch(data)
 
 		//这里是简单实现的一种方法
 		//msg := Message{}
@@ -149,72 +164,25 @@ func recProc(node *Node) {
 	}
 }
 
-var upSendChan chan []byte = make(chan []byte, 1024)
-
-func brodMsg(data []byte) {
-	upSendChan <- data
-}
-
-func init() {
-	go UdpSendProc()
-	go UpdRecProc()
-}
-
-// UdpSendProc 完成upd数据发送
-func UdpSendProc() {
-	udpConn, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		//192.168.31.147
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: 3000,
-		Zone: "",
-	})
-	if err != nil {
-		zap.S().Info("拨号udp端口失败", err)
-		return
+func authenticatedMessage(data []byte, userID int64) ([]byte, error) {
+	msg := Message{}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return nil, err
 	}
-
-	defer udpConn.Close()
-
-	for {
-		select {
-		case data := <-upSendChan:
-			_, err := udpConn.Write(data)
-			if err != nil {
-				zap.S().Info("写入udp消息失败", err)
-				return
-			}
-			fmt.Println("数据成功发送到udp服务端:", string(data))
-		}
+	if msg.Type == 0 {
+		msg.FormId = userID
+		return json.Marshal(msg)
 	}
-
-}
-
-// UpdRecProc 完成udp数据的接收
-func UpdRecProc() {
-	udpConn, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: 3000,
-	})
-	if err != nil {
-		zap.S().Info("监听udp端口失败", err)
-		return
+	if msg.TargetId <= 0 || (msg.Type != 1 && msg.Type != 2) {
+		return nil, fmt.Errorf("消息参数不合法")
 	}
-
-	defer udpConn.Close()
-
-	for {
-		var buf [1024]byte
-		n, err := udpConn.Read(buf[0:])
-		if err != nil {
-			zap.S().Info("读取udp数据失败", err)
-			return
-		}
-
-		fmt.Println("udp服务端接收udp数据", buf[0:n])
-
-		//处理发送逻辑
-		dispatch(buf[0:n])
+	messageID := make([]byte, 16)
+	if _, err := rand.Read(messageID); err != nil {
+		return nil, err
 	}
+	msg.MessageID = fmt.Sprintf("%x", messageID)
+	msg.FormId = userID
+	return json.Marshal(msg)
 }
 
 func dispatch(data []byte) {
@@ -239,6 +207,13 @@ func dispatch(data []byte) {
 
 // sendGroupMsg 群发
 func sendGroupMsg(formId, target uint, data []byte) (int, error) {
+	if !IsGroupMember(formId, target) {
+		return -1, fmt.Errorf("用户不是群成员")
+	}
+	if err := saveRedisMessage(groupMessageKey(target), data); err != nil {
+		return -1, err
+	}
+
 	//群发的逻辑：1获取到群里所有用户，然后向除开自己的每一位用户发送消息
 	userIDs, err := FindUsers(target)
 	if err != nil {
@@ -247,7 +222,7 @@ func sendGroupMsg(formId, target uint, data []byte) (int, error) {
 
 	for _, userId := range *userIDs {
 		if formId != userId {
-			sendMsgAndSave(int64(userId), data)
+			sendMsg(int64(userId), data)
 		}
 	}
 	return 0, nil
@@ -255,9 +230,9 @@ func sendGroupMsg(formId, target uint, data []byte) (int, error) {
 
 // sendMs 向用户发送消息
 func sendMsg(id int64, msg []byte) {
-	rwLocker.Lock()
+	rwLocker.RLock()
 	node, ok := clientMap[id]
-	rwLocker.Unlock()
+	rwLocker.RUnlock()
 
 	if !ok {
 		zap.S().Info("userID没有对应的node")
@@ -265,8 +240,9 @@ func sendMsg(id int64, msg []byte) {
 	}
 
 	zap.S().Info("targetID:", id, "node:", node)
-	if ok {
-		node.DataQueue <- msg
+	select {
+	case node.DataQueue <- msg:
+	case <-node.Done:
 	}
 }
 
@@ -279,13 +255,15 @@ func sendMsgAndSave(userId int64, msg []byte) {
 
 	jsonMsg := Message{}
 	json.Unmarshal(msg, &jsonMsg)
-	ctx := context.Background()
 	targetIdStr := strconv.Itoa(int(userId))
 	userIdStr := strconv.Itoa(int(jsonMsg.FormId))
 
 	//如果在线，需要即时推送
 	if ok {
-		node.DataQueue <- msg
+		select {
+		case node.DataQueue <- msg:
+		case <-node.Done:
+		}
 	}
 
 	//拼接记录名称
@@ -296,35 +274,33 @@ func sendMsgAndSave(userId int64, msg []byte) {
 		key = "msg_" + targetIdStr + "_" + userIdStr
 	}
 
-	//创建记录
-	res, err := global.RedisDB.ZRevRange(ctx, key, 0, -1).Result()
+	if err := saveRedisMessage(key, msg); err != nil {
+		zap.S().Info("保存聊天记录失败", err)
+	}
+}
+
+func saveRedisMessage(key string, msg []byte) error {
+	ctx := context.Background()
+	score, err := global.RedisDB.Incr(ctx, key+"_seq").Result()
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-
-	//将聊天记录写入数据库
-	score := float64(cap(res)) + 1
-	ress, e := global.RedisDB.ZAdd(ctx, key, &redis.Z{score, msg}).Result() //jsonMsg
-	//res, e := utils.Red.Do(ctx, "zadd", key, 1, jsonMsg).Result() //备用 后续拓展 记录完整msg
-	if e != nil {
-		fmt.Println(e)
-		return
+	if err := global.RedisDB.ZAdd(ctx, key, &redis.Z{Score: float64(score), Member: msg}).Err(); err != nil {
+		return err
 	}
-
-	// 设置ZSET的过期时间为10天
-	expirationTime := 24 * time.Hour * 7
-	_, expireErr := global.RedisDB.Expire(ctx, key, expirationTime).Result()
-	if expireErr != nil {
-		fmt.Println(expireErr)
-		return
+	expiration := 7 * 24 * time.Hour
+	pipe := global.RedisDB.Pipeline()
+	pipe.Expire(ctx, key, expiration)
+	pipe.Expire(ctx, key+"_seq", expiration)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return err
 	}
-
-	fmt.Println("ZSET的过期时间已设置为10天")
-	fmt.Println(ress)
-
-	//将key放入全局并
 	addKeyToSaveKey(key)
+	return nil
+}
+
+func groupMessageKey(groupID uint) string {
+	return "group_msg_" + strconv.FormatUint(uint64(groupID), 10)
 }
 
 // MarshalBinary 需要重写此方法才能完整的msg转byte[]
@@ -358,6 +334,114 @@ func RedisMsg(userIdA int64, userIdB int64, start int64, end int64, isRev bool) 
 	}
 	fmt.Println("聊天记录：", rels)
 	return rels
+}
+
+func GroupRedisMsg(groupID uint, start, end int64, isRev bool) []string {
+	if start < 0 || end < start {
+		return []string{}
+	}
+
+	ctx := context.Background()
+	redisCount, err := global.RedisDB.ZCard(ctx, groupMessageKey(groupID)).Result()
+	if err != nil {
+		zap.S().Info("获取群聊天记录数量失败", err)
+		redisCount = 0
+	}
+
+	if isRev {
+		return groupMessagesAscending(groupID, start, end, redisCount)
+	}
+	return groupMessagesDescending(groupID, start, end, redisCount)
+}
+
+func groupMessagesDescending(groupID uint, start, end, redisCount int64) []string {
+	ctx := context.Background()
+	result := make([]string, 0, end-start+1)
+	if start < redisCount {
+		redisEnd := end
+		if redisEnd >= redisCount {
+			redisEnd = redisCount - 1
+		}
+		records, err := global.RedisDB.ZRevRange(ctx, groupMessageKey(groupID), start, redisEnd).Result()
+		if err != nil {
+			zap.S().Info("获取群聊天记录失败", err)
+		} else {
+			result = append(result, records...)
+		}
+	}
+	if end >= redisCount {
+		dbStart := start - redisCount
+		if dbStart < 0 {
+			dbStart = 0
+		}
+		result = append(result, databaseGroupMessages(groupID, dbStart, end-redisCount, true)...)
+	}
+	return result
+}
+
+func groupMessagesAscending(groupID uint, start, end, redisCount int64) []string {
+	var databaseCount int64
+	if err := global.DB.Table("messages").Where("type = ? and target_id = ?", 2, groupID).Count(&databaseCount).Error; err != nil {
+		zap.S().Info("获取已持久化群聊天记录数量失败", err)
+		return []string{}
+	}
+
+	result := make([]string, 0, end-start+1)
+	if start < databaseCount {
+		databaseEnd := end
+		if databaseEnd >= databaseCount {
+			databaseEnd = databaseCount - 1
+		}
+		result = append(result, databaseGroupMessages(groupID, start, databaseEnd, false)...)
+	}
+	if end >= databaseCount && redisCount > 0 {
+		redisStart := start - databaseCount
+		if redisStart < 0 {
+			redisStart = 0
+		}
+		redisEnd := end - databaseCount
+		if redisEnd >= redisCount {
+			redisEnd = redisCount - 1
+		}
+		records, err := global.RedisDB.ZRange(context.Background(), groupMessageKey(groupID), redisStart, redisEnd).Result()
+		if err != nil {
+			zap.S().Info("获取群聊天记录失败", err)
+		} else {
+			result = append(result, records...)
+		}
+	}
+	return result
+}
+
+func databaseGroupMessages(groupID uint, start, end int64, descending bool) []string {
+	if end < start {
+		return []string{}
+	}
+	order := "id ASC"
+	if descending {
+		order = "id DESC"
+	}
+	messages := make([]Message, 0, end-start+1)
+	if err := global.DB.Table("messages").
+		Where("type = ? and target_id = ?", 2, groupID).
+		Order(order).
+		Offset(int(start)).
+		Limit(int(end - start + 1)).
+		Find(&messages).Error; err != nil {
+		zap.S().Info("获取已持久化群聊天记录失败", err)
+		return []string{}
+	}
+
+	result := make([]string, 0, len(messages))
+	for _, message := range messages {
+		data, err := json.Marshal(message)
+		if err != nil {
+			zap.S().Info("群聊天记录编码失败", err)
+			continue
+		}
+		result = append(result, string(data))
+	}
+	return result
 }
 
 // RecordPersistence 聊天记录持久化
@@ -459,6 +543,11 @@ func RecordPersistence() {
 func addKeyToSaveKey(key string) {
 	saveKeyMutex.Lock()
 	defer saveKeyMutex.Unlock()
+	for _, savedKey := range saveKey {
+		if savedKey == key {
+			return
+		}
+	}
 	saveKey = append(saveKey, key)
 }
 
@@ -466,7 +555,7 @@ func addKeyToSaveKey(key string) {
 func getSaveKey() []string {
 	saveKeyMutex.Lock()
 	defer saveKeyMutex.Unlock()
-	return saveKey
+	return append([]string(nil), saveKey...)
 }
 
 // 从 saveKey 中删除 key 的函数，保护了 saveKey 的并发访问

@@ -28,3 +28,11 @@ func FindUsers(groupId uint) (*[]uint, error) {
 	}
 	return &userIDs, nil
 }
+
+func IsGroupMember(userID, groupID uint) bool {
+	var count int64
+	global.DB.Model(&Relation{}).
+		Where("owner_id = ? and target_id = ? and type = 2", userID, groupID).
+		Count(&count)
+	return count > 0
+}

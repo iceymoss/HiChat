@@ -33,6 +33,8 @@ func Router() *gin.Engine {
 		user.POST("/updata", middlewear.JWY(), service.UpdataUser)
 		user.GET("/ws", middlewear.JWY(), service.SendMsg)
 		user.GET("/SendUserMsg", middlewear.JWY(), service.SendUserMsg)
+		user.POST("/redisMsg", middlewear.JWY(), service.RedisMsg)
+		user.POST("/groupRedisMsg", middlewear.JWY(), service.GroupRedisMsg)
 	}
 
 	//图片、语音模块
@@ -50,9 +52,6 @@ func Router() *gin.Engine {
 		relation.POST("/group_list", service.GroupList)
 		relation.POST("/join_group", service.JoinGroup)
 	}
-
-	//聊天记录
-	v1.POST("/user/redisMsg", service.RedisMsg).Use(middlewear.JWY())
 
 	return router
 }

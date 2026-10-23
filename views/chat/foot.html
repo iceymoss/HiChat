@@ -426,6 +426,16 @@
                 //群聊的初始化
                 groupmsg: function (group) {
                     if (this.isDisable) {
+                        this.start = 0;
+                        this.end = 200;
+                        post("v1/user/groupRedisMsg"+"?token="+util.parseQuery("token")+"&userId="+userId(), { groupId: group.ID, start: this.start, end: this.end, isRev: false }, function (res) {
+                            for (var i in res.Total) {
+                                var msg = JSON.parse(res.Total[i]);
+                                this.loaduserinfo(msg.userId, function (user) {
+                                    this.showmsg(user, msg, false, true);
+                                }.bind(this));
+                            }
+                        }.bind(this));
                         this.setTimeFlag()
                         this.win = "group";
                         this.title = group.Name;
@@ -469,7 +479,8 @@
 
                 },
                 initwebsocket: function () {
-                    var url = "ws://" + location.host + "/v1/user/SendUserMsg?userId=" + userId() +"&targetId="+ targetId() +"&token=" + util.parseQuery("token");
+                    var protocol = location.protocol === "https:" ? "wss://" : "ws://";
+                    var url = protocol + location.host + "/v1/user/SendUserMsg?userId=" + userId() +"&targetId="+ targetId() +"&token=" + util.parseQuery("token");
                     this.webSocket = new WebSocket(url);
                     //消息处理
                     this.webSocket.onmessage = function (evt) {
